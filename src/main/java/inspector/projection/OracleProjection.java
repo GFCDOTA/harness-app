@@ -47,6 +47,7 @@ public final class OracleProjection {
             m.put("id", c.id());
             m.put("title", c.title());
             m.put("when", c.when());
+            m.put("declaredWhen", c.declaredWhen());
             m.put("sizeBytes", c.sizeBytes());
             m.put("question", c.question());
             m.put("answer", c.answer());

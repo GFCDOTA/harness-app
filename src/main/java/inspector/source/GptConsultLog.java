@@ -51,13 +51,24 @@ public final class GptConsultLog {
         return dir;
     }
 
-    /** Mais recentes primeiro. Diretorio ausente devolve lista vazia, nao explode. */
+    /**
+     * Mais recentes primeiro, por DATA DE ESCRITA do arquivo.
+     *
+     * <p>Nao ordena por nome: os registros novos comecam com letra
+     * ({@code GPT_}, {@code SPIKE_}) e os antigos com digito, e em ordem descendente
+     * as letras vencem os digitos — o que colocava um registro de ontem acima de um
+     * de hoje. Nao ordena pela data declarada no documento tampouco: ela e opcional
+     * e vem em formatos diferentes entre os dois layouts.
+     *
+     * <p>Diretorio ausente devolve lista vazia, nao explode.
+     */
     public List<GptConsult> readAll() {
         if (!Files.isDirectory(dir)) return List.of();
         List<Path> files;
         try (Stream<Path> s = Files.list(dir)) {
             files = s.filter(p -> p.getFileName().toString().endsWith(".md"))
-                    .sorted(Comparator.comparing((Path p) -> p.getFileName().toString()).reversed())
+                    .sorted(Comparator.comparingLong(GptConsultLog::modifiedAt).reversed()
+                            .thenComparing(p -> p.getFileName().toString()))
                     .toList();
         } catch (IOException e) {
             throw new UncheckedIOException("nao consegui listar " + dir, e);
@@ -68,10 +79,24 @@ public final class GptConsultLog {
                 out.add(parse(f));
             } catch (IOException e) {
                 out.add(new GptConsult(f.getFileName().toString(), f.getFileName().toString(),
-                        "", 0L, "", "nao consegui ler: " + e.getMessage()));
+                        isoOf(f), "", 0L, "", "nao consegui ler: " + e.getMessage()));
             }
         }
         return List.copyOf(out);
+    }
+
+    /** Epoch em ms; arquivo ilegivel vai para o fim em vez de derrubar a ordenacao. */
+    private static long modifiedAt(Path p) {
+        try {
+            return Files.getLastModifiedTime(p).toMillis();
+        } catch (IOException e) {
+            return Long.MIN_VALUE;
+        }
+    }
+
+    private static String isoOf(Path p) {
+        long ms = modifiedAt(p);
+        return ms == Long.MIN_VALUE ? "" : java.time.Instant.ofEpochMilli(ms).toString();
     }
 
     GptConsult parse(Path file) throws IOException {
@@ -90,7 +115,7 @@ public final class GptConsultLog {
             answer = text;
         }
 
-        return new GptConsult(name, title(text, name), when(text, name),
+        return new GptConsult(name, title(text, name), isoOf(file), when(text, name),
                 Files.size(file), excerpt(question), excerpt(answer));
     }
 

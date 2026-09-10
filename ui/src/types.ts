@@ -72,7 +72,10 @@ export type ServiceHealth = {
 export type Consult = {
   id: string;
   title: string;
+  /** Instante ISO da ultima escrita do arquivo. Chave de ordenacao e de exibicao. */
   when: string;
+  /** O que o proprio documento diz ser sua data. Opcional, formato variavel. */
+  declaredWhen: string;
   sizeBytes: number;
   question: string;
   answer: string;

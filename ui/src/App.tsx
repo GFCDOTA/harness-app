@@ -4,6 +4,7 @@ import { EventsView } from "./EventsView";
 import { DetailPanel } from "./DetailPanel";
 import { OracleView } from "./OracleView";
 import { latest, probe } from "./bridge";
+import { applyTheme, readTheme, type Theme } from "./theme";
 import type { LaunchResult, OraclePayload, RunPayload, View } from "./types";
 
 function secs(v: number | null): string {
@@ -22,6 +23,7 @@ export function App() {
   const [view, setView] = useState<View>("pipeline");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastLaunch, setLastLaunch] = useState<LaunchResult | null>(null);
+  const [theme, setTheme] = useState<Theme>(readTheme);
 
   // A API e o flag `ready` sao instalados APOS a montagem. createRoot().render() e
   // assincrono: marcar ready antes disso sinalizaria "pronto" enquanto loadRun ainda
@@ -69,6 +71,10 @@ export function App() {
     latest.view = view;
   }, [view]);
 
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
   if (!run) {
     return <div className="empty">esperando a run do Java…</div>;
   }
@@ -91,6 +97,7 @@ export function App() {
           </div>
           <div className="top-src">{run.source}</div>
         </div>
+        <div className="top-r">
         <nav className="views" role="tablist">
           {TABS.map((t) => (
             <button
@@ -107,12 +114,22 @@ export function App() {
             </button>
           ))}
         </nav>
+        <button
+          className="theme-toggle"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          title={theme === "dark" ? "mudar para claro" : "mudar para escuro"}
+          aria-label="alternar tema"
+          data-theme-now={theme}
+        >
+          {theme === "dark" ? "☼" : "☽"}
+        </button>
+        </div>
       </header>
 
       <main className="body">
         <div className="canvas">
           {view === "pipeline" ? (
-            <PipelineView run={run} selectedId={selectedId} onSelect={setSelectedId} />
+            <PipelineView run={run} selectedId={selectedId} onSelect={setSelectedId} theme={theme} />
           ) : view === "events" ? (
             <EventsView boxes={run.boxes} />
           ) : (

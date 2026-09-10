@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react";
 import { StepNode, TerminalNode } from "./StepNode";
 import type { RunPayload } from "./types";
+import type { Theme } from "./theme";
 
 const NODE_TYPES = { step: StepNode, terminal: TerminalNode };
 
@@ -29,11 +30,13 @@ function secs(v: number | null): string {
 export function PipelineView({
   run,
   selectedId,
-  onSelect
+  onSelect,
+  theme
 }: {
   run: RunPayload;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  theme: Theme;
 }) {
   const { nodes, edges } = useMemo(() => {
     const steps = run.pipeline.nodes;
@@ -108,6 +111,7 @@ export function PipelineView({
       nodes={nodes}
       edges={edges}
       nodeTypes={NODE_TYPES}
+      colorMode={theme}
       onNodeClick={(_, node) => onSelect(node.type === "step" ? node.id : null)}
       onPaneClick={() => onSelect(null)}
       /* SEM fitView de proposito: numa cadeia longa ele encolhe os nos ate ficarem

@@ -35,9 +35,18 @@ Clique num nó → painel lateral com os eventos crus daquele passo.
 **Events View** (secundária) — a lista dos eventos, um a um. É debugger, não a
 experiência principal.
 
+O app abre em **tema escuro**; o botão no canto superior direito alterna e a escolha
+fica gravada. A escolha é explícita porque o WebView do JavaFX não acompanha o tema
+do Windows de forma confiável.
+
 **Oráculo** — a esteira está viva? (GPT-Docker `:8899`, Qdrant `:6333`, Ollama
 `:11434`, sondados a cada 5 s) e o histórico das consultas ao GPT, com a **prévia
-dos dois lados**: o que eu perguntei e o que ele respondeu, lado a lado.
+dos dois lados**: o que eu perguntei e o que ele respondeu, lado a lado, com filtro
+por título ou conteúdo.
+
+A lista ordena pela **data de escrita do arquivo**, não pelo nome: os registros novos
+começam com letra (`GPT_`, `SPIKE_`) e os antigos com dígito, e ordenar por nome
+colocava um registro de ontem acima de um de hoje.
 
 ### Ligar serviço pelo app
 
