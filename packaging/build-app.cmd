@@ -1,5 +1,12 @@
 @echo off
-REM Gera o app clicavel (app-image do jpackage) em dist\HarnessApp.
+REM Gera o app clicavel (app-image do jpackage) numa pasta app\rN NOVA.
+REM
+REM Por que rotativo: reutilizar um caminho que ja teve uma app-image APAGADA produz
+REM uma imagem que nao inicia — o launcher sobe com ~16 MB, o JVM nunca comeca e nao
+REM ha mensagem de erro. Testado: caminho virgem funciona; o MESMO caminho depois de
+REM rmdir falha; mover uma imagem boa para dentro dele tambem falha. Nao e Defender
+REM (sem deteccao registrada). Detalhe em docs\field-notes-jpackage.md.
+REM
 REM ASCII de proposito: .cmd/.ps1 acentuado quebra o parser do PowerShell 5.1.
 setlocal
 
@@ -15,19 +22,26 @@ popd
 echo [2/4] build do Java (testes incluidos)
 call mvnw.cmd -B package || goto :fail
 
-echo [3/4] fechando o app e limpando a imagem anterior
-REM Apagar a pasta com o app ABERTO deixa o diretorio num estado em que o novo
-REM launcher sobe e o JVM nunca inicia (16 MB parado, sem janela). Fecha antes.
+echo [3/4] fechando o app e escolhendo uma pasta NOVA
 taskkill /F /IM HarnessApp.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
-if exist "app\HarnessApp" rmdir /s /q "app\HarnessApp"
+
+set "SLOT="
+for /l %%i in (2,1,99) do (
+  if not defined SLOT if not exist "app\r%%i" set "SLOT=r%%i"
+)
+if not defined SLOT (
+  echo Nao achei slot livre em app\r2..r99. Apague os antigos.
+  exit /b 1
+)
+echo     usando app\%SLOT%
 
 echo [4/4] jpackage
 "%JAVA_HOME%\bin\jpackage.exe" ^
   --type app-image ^
   --name HarnessApp ^
   --app-version 0.1.0 ^
-  --dest app ^
+  --dest "app\%SLOT%" ^
   --input target\dist ^
   --main-jar harness-app-0.1.0-SNAPSHOT.jar ^
   --main-class inspector.ui.Launcher ^
@@ -39,8 +53,11 @@ echo [4/4] jpackage
   --java-options "-DconsultsDir=E:\Claude\apps\sketchup-mcp\.ai_bridge\responses" || goto :fail
 
 echo.
-echo OK: dist\HarnessApp\HarnessApp.exe
-echo Atalho: powershell -File packaging\make-shortcut.ps1
+echo OK: app\%SLOT%\HarnessApp\HarnessApp.exe
+echo Repontando o atalho da area de trabalho...
+powershell -NoProfile -File "packaging\make-shortcut.ps1" || goto :fail
+echo.
+echo Pastas antigas em app\ podem ser apagadas a mao quando quiser.
 exit /b 0
 
 :fail

@@ -73,3 +73,24 @@ com o `.exe` ainda em execucao, e a imagem nova escrita ali nasce quebrada. O
 
 Corolario do item 2: nao basta "rebuild, nunca patch" — e **feche o app antes do
 rebuild**, e prefira um caminho que nunca foi apagado sob uso.
+
+## 6. Correcao do item 5: o caminho fica queimado APOS QUALQUER delecao
+
+O item 5 culpava "apagar com o app aberto". Testes seguintes mostraram que a
+condicao e mais ampla e mais chata:
+
+| Cenario | Resultado |
+|---|---|
+| jpackage num caminho VIRGEM | **funciona** |
+| mesmo caminho, apos `rmdir` (app ja fechado) | falha |
+| imagem BOA movida para dentro do caminho apagado | falha |
+| Defender como causa | descartado — `Get-MpThreatDetection` sem registro |
+
+Sintoma sempre igual: launcher sobe com 8-16 MB, o processo do JVM nunca aparece,
+nenhuma mensagem. Uma imagem sadia mostra DOIS processos, o segundo com ~290 MB —
+**e essa a checagem que vale**, nao "o processo existe".
+
+**Receita adotada:** o build nunca reutiliza caminho. `build-app.cmd` procura o
+primeiro `app\rN` livre, gera ali, e `make-shortcut.ps1` aponta o atalho para o `rN`
+mais recente. Pastas antigas podem ser apagadas a mao depois — o que nao pode e
+gravar de novo por cima de uma que ja foi apagada.
