@@ -4,6 +4,7 @@ import inspector.domain.Run;
 import inspector.domain.TraceEvent;
 import inspector.projection.TraceProjection;
 import inspector.source.JsonlReplayTraceSource;
+import inspector.source.TraceLocator;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -34,7 +35,12 @@ import java.util.List;
  */
 public final class InspectorApp extends Application {
 
-    private static final Path DEFAULT_TRACE_DIR = Paths.get("..", ".ai_bridge", "traces");
+    /**
+     * Vizinhança do sketchup-mcp: vale enquanto este app estiver ao lado dele. Em
+     * repositório próprio isto simplesmente não existe, e o TraceLocator exige
+     * -Dtrace / -DtraceDir / INSPECTOR_TRACE_DIR em vez de abrir vazio.
+     */
+    private static final Path CONVENTIONAL_TRACE_DIR = Paths.get("..", ".ai_bridge", "traces");
 
     private final TraceProjection projection = new TraceProjection();
 
@@ -79,12 +85,9 @@ public final class InspectorApp extends Application {
         return Run.fromEvents(collected);
     }
 
+    /** A regra de resolução vive no TraceLocator, que é testável sem tela. */
     private JsonlReplayTraceSource resolveSource() {
-        String override = System.getProperty("trace");
-        if (override != null && !override.isBlank()) {
-            return new JsonlReplayTraceSource(Paths.get(override));
-        }
-        return JsonlReplayTraceSource.newestIn(DEFAULT_TRACE_DIR);
+        return TraceLocator.fromEnvironment(CONVENTIONAL_TRACE_DIR);
     }
 
     /** A UI registra a API de forma assíncrona; espera o flag em vez de chutar um sleep. */
