@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
   type Edge,
   type Node,
@@ -116,8 +115,9 @@ export function PipelineView({
       proOptions={{ hideAttribution: false }}
     >
       <Background gap={18} size={1} />
+      {/* sem MiniMap de proposito: num grafo linear ele nao ajuda a navegar e
+          ainda ocupa o canto com um retangulo que parece quebrado. */}
       <Controls showInteractive={false} />
-      <MiniMap pannable zoomable />
     </ReactFlow>
   );
 }
