@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { PersonaIcon, PERSONA_LABEL, personaFor } from "./personas";
 import type { Step } from "./types";
 
-export type StepFlowNode = Node<{ step: Step }, "step">;
+export type StepFlowNode = Node<{ step: Step; order: number }, "step">;
 
 function ms(v: number | null): string {
   if (v === null) return "—";
@@ -27,30 +27,33 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
       data-persona={persona}
       data-status={status}
       data-external={s.external ? "yes" : "no"}
+      data-order={data.order}
       title={PERSONA_LABEL[persona]}
     >
-      <Handle type="target" position={Position.Top} />
-      <div className="sn-icon">
-        <PersonaIcon persona={persona} size={40} />
-      </div>
-      <div className="sn-body">
-        <div className="sn-title">{s.component ?? "—"}</div>
-        <div className="sn-sub">
-          <span className={`chip ${s.external ? "chip-ext" : "chip-loc"}`}>
-            {s.external ? "HTTP externo" : "local"}
-          </span>
-          <span className="sn-cat">{s.category}</span>
-          <span className="sn-ev">{s.eventCount} ev</span>
-        </div>
-        {s.detail ? <div className="sn-detail">{s.detail}</div> : null}
-      </div>
-      <div className="sn-right">
-        <div className="sn-status">
+      <Handle type="target" position={Position.Left} />
+      <div className="sn-head">
+        {/* a ordem de execucao no proprio no: com o grafo afastado, o numero
+            continua legivel quando o texto ja nao esta. */}
+        <span className="sn-order">{data.order}</span>
+        <span className="sn-icon">
+          <PersonaIcon persona={persona} size={30} />
+        </span>
+        <span className="sn-status">
           {STATUS_MARK[status] ?? "?"} {status}
-        </div>
-        <div className="sn-dur">{ms(s.durationMs)}</div>
+        </span>
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      <div className="sn-title">{s.component ?? "—"}</div>
+      <div className="sn-sub">
+        <span className={`chip ${s.external ? "chip-ext" : "chip-loc"}`}>
+          {s.external ? "HTTP externo" : "local"}
+        </span>
+        <span className="sn-cat">{s.category}</span>
+      </div>
+      <div className="sn-foot">
+        <span className="sn-dur">{ms(s.durationMs)}</span>
+        <span className="sn-ev">{s.eventCount} ev</span>
+      </div>
+      <Handle type="source" position={Position.Right} />
     </div>
   );
 }
@@ -60,10 +63,10 @@ export type TerminalFlowNode = Node<{ label: string; sub: string; kind: "start" 
 export function TerminalNode({ data }: NodeProps<TerminalFlowNode>) {
   return (
     <div className={`terminal-node tn-${data.kind}`} data-terminal={data.kind}>
-      {data.kind === "end" ? <Handle type="target" position={Position.Top} /> : null}
+      {data.kind === "end" ? <Handle type="target" position={Position.Left} /> : null}
       <div className="tn-label">{data.label}</div>
       <div className="tn-sub">{data.sub}</div>
-      {data.kind === "start" ? <Handle type="source" position={Position.Bottom} /> : null}
+      {data.kind === "start" ? <Handle type="source" position={Position.Right} /> : null}
     </div>
   );
 }

@@ -37,6 +37,28 @@ public final class WebBridge {
         call("appendEvent", eventJson);
     }
 
+    /** {@code window.inspector.setOracle(json)} — saúde dos serviços + consultas ao GPT. */
+    public void setOracle(String oracleJson) {
+        call("setOracle", oracleJson);
+    }
+
+    /** {@code window.inspector.setLaunchResult(json)} — o que aconteceu no botão. */
+    public void setLaunchResult(String resultJson) {
+        call("setLaunchResult", resultJson);
+    }
+
+    /**
+     * Puxa e esvazia a fila de pedidos da UI.
+     *
+     * <p>A ponte e de UMA direcao (Java -> JS). Para a pagina pedir algo ao Java sem
+     * reabrir o {@code JSObject} proibido, ela ENFILEIRA e o Java PUXA. Nenhum objeto
+     * Java fica exposto ao JavaScript, e o que volta e so texto.
+     */
+    public String drainRequests() {
+        Object r = engine.executeScript(API + ".__drain ? " + API + ".__drain() : '[]'");
+        return r == null ? "[]" : String.valueOf(r);
+    }
+
     /** {@code true} se a UI já registrou a API. */
     public boolean isReady() {
         Object r = engine.executeScript(

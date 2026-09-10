@@ -2,4 +2,6 @@ target/
 ui/node_modules/
 ui/tsconfig.tsbuildinfo
 traces-local/
+consults-local/
 dist/
+shots/

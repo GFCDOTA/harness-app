@@ -12,17 +12,19 @@ import type { RunPayload } from "./types";
 
 const NODE_TYPES = { step: StepNode, terminal: TerminalNode };
 
-const X = 0;
-const GAP = 132;
-const NODE_W = 420;
+const NODE_W = 220;
+const TERM_W = 150;
+const GAP = 62;
+const Y = 0;
 
 function secs(v: number | null): string {
   return v === null ? "—" : (v / 1000).toFixed(2) + " s";
 }
 
 /**
- * Layout: a run e uma cadeia, entao a posicao sai de um contador. Nenhuma engine de
- * layout entra aqui enquanto o grafo for linear — seria dependencia sem problema.
+ * Layout HORIZONTAL: a run e uma cadeia, e da esquerda para a direita ela le como
+ * linha do tempo. A posicao sai de um contador — nenhuma engine de layout entra
+ * aqui enquanto o grafo for linear, seria dependencia sem problema.
  */
 export function PipelineView({
   run,
@@ -36,48 +38,47 @@ export function PipelineView({
   const { nodes, edges } = useMemo(() => {
     const steps = run.pipeline.nodes;
     const ns: Node[] = [];
+    let x = 0;
 
     ns.push({
       id: "__start",
       type: "terminal",
-      position: { x: X, y: 0 },
-      data: { label: "RUN", sub: `${run.eventCount} eventos · ${secs(run.durationMs)}`, kind: "start" },
+      position: { x, y: Y + 26 },
+      data: { label: "RUN", sub: `${run.eventCount} ev · ${secs(run.durationMs)}`, kind: "start" },
       draggable: false,
-      width: NODE_W
+      width: TERM_W
     });
+    x += TERM_W + GAP;
 
     steps.forEach((step, i) => {
       ns.push({
         id: step.id,
         type: "step",
-        position: { x: X, y: (i + 1) * GAP },
-        data: { step },
+        position: { x, y: Y },
+        data: { step, order: i + 1 },
         selected: step.id === selectedId,
         width: NODE_W
       });
+      x += NODE_W + GAP;
     });
 
     ns.push({
       id: "__end",
       type: "terminal",
-      position: { x: X, y: (steps.length + 1) * GAP },
+      position: { x, y: Y + 26 },
       data: {
         label: (run.terminalStatus ?? "sem terminal").toUpperCase(),
         sub: "fim da run",
         kind: "end"
       },
       draggable: false,
-      width: NODE_W
+      width: TERM_W
     });
 
+    const arrow = { type: MarkerType.ArrowClosed };
     const es: Edge[] = [];
     if (steps.length > 0) {
-      es.push({
-        id: "__start->" + steps[0]!.id,
-        source: "__start",
-        target: steps[0]!.id,
-        markerEnd: { type: MarkerType.ArrowClosed }
-      });
+      es.push({ id: "__start->" + steps[0]!.id, source: "__start", target: steps[0]!.id, markerEnd: arrow });
     }
     for (const e of run.pipeline.edges) {
       es.push({
@@ -88,7 +89,7 @@ export function PipelineView({
         className: e.fallback ? "fallback" : undefined,
         animated: e.fallback,
         style: e.fallback ? { stroke: "#BA7517", strokeWidth: 2, strokeDasharray: "6 4" } : undefined,
-        markerEnd: { type: MarkerType.ArrowClosed }
+        markerEnd: arrow
       });
     }
     if (steps.length > 0) {
@@ -96,7 +97,7 @@ export function PipelineView({
         id: steps[steps.length - 1]!.id + "->__end",
         source: steps[steps.length - 1]!.id,
         target: "__end",
-        markerEnd: { type: MarkerType.ArrowClosed }
+        markerEnd: arrow
       });
     }
     return { nodes: ns, edges: es };
@@ -109,14 +110,16 @@ export function PipelineView({
       nodeTypes={NODE_TYPES}
       onNodeClick={(_, node) => onSelect(node.type === "step" ? node.id : null)}
       onPaneClick={() => onSelect(null)}
-      fitView
-      fitViewOptions={{ padding: 0.15 }}
-      minZoom={0.2}
-      proOptions={{ hideAttribution: false }}
+      /* SEM fitView de proposito: numa cadeia longa ele encolhe os nos ate ficarem
+         ilegiveis e ainda desperdica a altura da janela. Zoom fixo legivel, ancorado
+         a esquerda, e o botao de fit dos Controls fica ali para a visao geral. */
+      defaultViewport={{ x: 24, y: 235, zoom: 0.95 }}
+      minZoom={0.15}
+      maxZoom={2}
     >
       <Background gap={18} size={1} />
-      {/* sem MiniMap de proposito: num grafo linear ele nao ajuda a navegar e
-          ainda ocupa o canto com um retangulo que parece quebrado. */}
+      {/* sem MiniMap: num grafo linear ele nao ajuda a navegar e ocupa o canto
+          com um retangulo que parece defeito. */}
       <Controls showInteractive={false} />
     </ReactFlow>
   );

@@ -26,6 +26,12 @@
     <trace/>
     <!-- diretorio de traces; vazio = traces-local ao lado do app -->
     <traceDir/>
+    <!-- diretorio das consultas ao GPT (.ai_bridge/responses) -->
+    <consultsDir/>
+    <!-- diretorio para o app fotografar a si mesmo -->
+    <snapshotDir/>
+    <!-- passo opt-in do smoke check que exercita o botao de ligar -->
+    <selftestLaunch/>
   </properties>
 
   <dependencies>
@@ -98,6 +104,9 @@
             <option>-Dselftest=${selftest}</option>
             <option>-Dtrace=${trace}</option>
             <option>-DtraceDir=${traceDir}</option>
+            <option>-DconsultsDir=${consultsDir}</option>
+            <option>-DsnapshotDir=${snapshotDir}</option>
+            <option>-DselftestLaunch=${selftestLaunch}</option>
           </options>
         </configuration>
       </plugin>

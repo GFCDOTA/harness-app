@@ -1,26 +1,48 @@
 package inspector.ui;
 
+import inspector.domain.HealthProbe;
+import inspector.domain.LaunchResult;
+import inspector.domain.ServiceAction;
+import inspector.domain.ServiceLauncher;
 import inspector.domain.Run;
+import inspector.domain.ServiceHealth;
+import inspector.domain.ServiceTarget;
 import inspector.domain.TraceEvent;
+import inspector.projection.OracleProjection;
 import inspector.projection.TraceProjection;
+import inspector.source.GptConsultLog;
+import inspector.source.HttpHealthProbe;
+import inspector.source.ProcessServiceLauncher;
 import inspector.source.JsonlReplayTraceSource;
 import inspector.source.TraceLocator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.concurrent.Worker;
 import javafx.scene.Scene;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.WritableImage;
 import javafx.util.Duration;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Host desktop do AI Pipeline Inspector (ADR-001).
@@ -44,6 +66,66 @@ public final class InspectorApp extends Application {
     private static final Path CONVENTIONAL_TRACE_DIR = Paths.get("traces-local");
 
     private final TraceProjection projection = new TraceProjection();
+    private final OracleProjection oracleProjection = new OracleProjection();
+    private final HealthProbe healthProbe = new HttpHealthProbe();
+
+    /**
+     * A esteira desta máquina. Vive aqui, na raiz de composição, e não no domínio:
+     * URL de serviço é configuração de ambiente, não regra de negócio.
+     */
+    private static final List<ServiceTarget> SERVICES = List.of(
+            new ServiceTarget("gpt", "GPT-Docker", URI.create("http://127.0.0.1:8899/health"),
+                    "oráculo — decisão e veredito visual"),
+            new ServiceTarget("qdrant", "Qdrant", URI.create("http://127.0.0.1:6333/collections"),
+                    "banco vetorial — recall semântico"),
+            new ServiceTarget("ollama", "Ollama", URI.create("http://127.0.0.1:11434/api/tags"),
+                    "modelos locais — embedding e LLM"));
+
+    private static final int HEALTH_POLL_SECONDS = 5;
+
+    /**
+     * O que o Felipe pode LIGAR pelo app, por clique.
+     *
+     * <p>Lista fechada e montada no codigo: a pagina so manda um id conhecido, nunca
+     * um comando. Sem isso, um painel web viraria um shell.
+     *
+     * <p>E nao ha entrada aqui para "reiniciar se cair" — ver {@link ServiceAction}.
+     * Botao sim, watchdog nunca; foi o watchdog que matou o NOC.
+     *
+     * <p>Caminhos desta maquina, como os de {@link #SERVICES}. Nao usa
+     * {@code powershell -ExecutionPolicy Bypass}: foi o padrao que o Defender flagou.
+     */
+    private static final Map<String, ServiceAction> ACTIONS = buildActions();
+
+    private static Map<String, ServiceAction> buildActions() {
+        Map<String, ServiceAction> m = new LinkedHashMap<>();
+        m.put("docker", new ServiceAction("docker", "Docker Desktop",
+                List.of("cmd", "/c", "start", "", "C:/Program Files/Docker/Docker/Docker Desktop.exe"), null));
+        m.put("gpt", new ServiceAction("gpt", "GPT-Docker",
+                List.of("docker", "compose", "up", "-d"), "E:/Claude/ops/gpt-docker"));
+        m.put("qdrant", new ServiceAction("qdrant", "Qdrant",
+                List.of("docker", "compose", "-f", "docker-compose.rag.yml", "up", "-d"),
+                "E:/Claude/apps/sketchup-mcp"));
+        m.put("ollama", new ServiceAction("ollama", "Ollama",
+                List.of("cmd", "/c", "start", "", "ollama.exe", "serve"), null));
+        return Map.copyOf(m);
+    }
+
+    private static final int DRAIN_POLL_MILLIS = 400;
+
+    private final ServiceLauncher launcher = new ProcessServiceLauncher();
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    /**
+     * Sondas FORA da thread da UI: 3 serviços x 2 s de timeout congelariam a janela.
+     * DAEMON de propósito — thread viva seguraria o processo depois de fechar a
+     * janela, e a regra desta casa é que fechar mata.
+     */
+    private final ExecutorService probePool = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "health-probe");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Override
     public void start(Stage stage) {
@@ -69,6 +151,7 @@ public final class InspectorApp extends Application {
             if (now == Worker.State.SUCCEEDED) {
                 whenReady(bridge, 0, () -> {
                     bridge.loadRun(projection.toJson(read(source), source.describe()));
+                    startOraclePolling(bridge);
                     if (selfTest) selfTest(bridge, stage);
                 });
             } else if (now == Worker.State.FAILED) {
@@ -77,6 +160,104 @@ public final class InspectorApp extends Application {
             }
         });
         engine.load(page.toExternalForm());
+    }
+
+    /**
+     * Sonda a esteira a cada {@value #HEALTH_POLL_SECONDS} s e relê as consultas ao
+     * GPT, empurrando tudo para o painel do oráculo.
+     *
+     * <p>Isto OBSERVA. Não sobe, não derruba, não reinicia nada — serviço fora do ar
+     * aparece como fora do ar, e é o Docker (ou o serviço do Ollama) que ressuscita.
+     */
+    private void startOraclePolling(WebBridge bridge) {
+        GptConsultLog consultLog = resolveConsultLog();
+        Runnable tick = () -> probePool.submit(() -> {
+            List<ServiceHealth> health = new ArrayList<>(SERVICES.size());
+            for (ServiceTarget target : SERVICES) {
+                health.add(healthProbe.probe(target));
+            }
+            String json;
+            try {
+                json = oracleProjection.toJson(health, consultLog.readAll(),
+                        consultLog.dir().toString());
+            } catch (RuntimeException ex) {
+                System.err.println("[inspector] painel do oráculo falhou: " + ex.getMessage());
+                return;
+            }
+            Platform.runLater(() -> {
+                try {
+                    bridge.setOracle(json);
+                } catch (RuntimeException ex) {
+                    System.err.println("[inspector] não consegui empurrar o oráculo: " + ex.getMessage());
+                }
+            });
+        });
+
+        tick.run();
+        Timeline poll = new Timeline(new KeyFrame(
+                Duration.seconds(HEALTH_POLL_SECONDS), e -> tick.run()));
+        poll.setCycleCount(Timeline.INDEFINITE);
+        poll.play();
+
+        startRequestDraining(bridge);
+    }
+
+    /**
+     * Puxa os pedidos que a UI enfileirou e executa CADA UM uma vez.
+     *
+     * <p>Sem retentativa e sem reagir a estado: se o servico continuar fora do ar, o
+     * painel mostra fora do ar e a decisao de tentar de novo e do Felipe.
+     */
+    private void startRequestDraining(WebBridge bridge) {
+        Timeline drain = new Timeline(new KeyFrame(Duration.millis(DRAIN_POLL_MILLIS), e -> {
+            String pending;
+            try {
+                pending = bridge.drainRequests();
+            } catch (RuntimeException ex) {
+                return;
+            }
+            if (pending == null || pending.isBlank() || pending.equals("[]")) return;
+
+            List<String> ids;
+            try {
+                ids = mapper.readValue(pending, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+            } catch (Exception ex) {
+                System.err.println("[inspector] fila de pedidos ilegivel: " + ex.getMessage());
+                return;
+            }
+            for (String id : ids) {
+                ServiceAction action = ACTIONS.get(id);
+                if (action == null) {
+                    // id desconhecido nao vira comando: a lista e fechada.
+                    push(bridge, new LaunchResult(id, false, null,
+                            "acao nao declarada para '" + id + "'", java.time.Instant.now().toString()));
+                    continue;
+                }
+                probePool.submit(() -> {
+                    LaunchResult r = launcher.run(action);
+                    Platform.runLater(() -> push(bridge, r));
+                });
+            }
+        }));
+        drain.setCycleCount(Timeline.INDEFINITE);
+        drain.play();
+    }
+
+    private void push(WebBridge bridge, LaunchResult r) {
+        try {
+            bridge.setLaunchResult(mapper.writeValueAsString(r));
+        } catch (Exception ex) {
+            System.err.println("[inspector] nao consegui devolver o resultado: " + ex.getMessage());
+        }
+    }
+
+    /** Mesmo padrão do trace: explícito, env, convenção — e vazio em vez de inventar. */
+    private GptConsultLog resolveConsultLog() {
+        String prop = System.getProperty("consultsDir");
+        if (prop != null && !prop.isBlank()) return new GptConsultLog(Paths.get(prop.trim()));
+        String env = System.getenv("INSPECTOR_CONSULTS_DIR");
+        if (env != null && !env.isBlank()) return new GptConsultLog(Paths.get(env.trim()));
+        return new GptConsultLog(Paths.get("consults-local"));
     }
 
     /** O domínio é montado a partir do port, nunca do arquivo direto. */
@@ -117,15 +298,91 @@ public final class InspectorApp extends Application {
      * podem quebrar de forma silenciosa: o grafo, o clique->painel, e a Events View.
      */
     private void selfTest(WebBridge bridge, Stage stage) {
-        step(700, () -> System.out.println("[selftest] pipeline " + bridge.probe()),
-        () -> step(400, () -> bridge.exec("document.querySelector('.react-flow__node-step')"
+        step(900, () -> {
+            System.out.println("[selftest] pipeline " + bridge.probe());
+            snapshot(stage, "01-pipeline");
+        },
+        () -> step(500, () -> bridge.exec("document.querySelectorAll('.react-flow__node-step')[3]"
                         + ".dispatchEvent(new MouseEvent('click',{bubbles:true}))"),
-        () -> step(400, () -> System.out.println("[selftest] detalhe  " + bridge.probe()),
-        () -> step(300, () -> bridge.exec("window.inspector.setView('events')"),
+        () -> step(500, () -> bridge.exec(
+                "document.querySelectorAll('.dt-evhead').forEach(function(b){b.click();})"),
+        () -> step(500, () -> {
+            System.out.println("[selftest] detalhe  " + bridge.probe());
+            snapshot(stage, "02-detalhe");
+        },
+        () -> step(400, () -> bridge.exec("window.inspector.setView('oracle')"),
+        () -> step(600, () -> {
+            System.out.println("[selftest] oraculo  " + bridge.probe());
+            snapshot(stage, "03-oraculo");
+        },
+        () -> step(400, () -> bridge.exec("window.inspector.setView('events')"),
         () -> step(400, () -> {
             System.out.println("[selftest] events   " + bridge.probe());
+            launchStepOrClose(bridge, stage);
+        }, null))))))));
+    }
+
+    /**
+     * Passo OPT-IN do smoke check: exercita o caminho completo do botao
+     * (UI enfileira -> Java puxa -> comando roda). Fica fora do padrao porque tem
+     * efeito colateral real — sobe container —, e teste que liga coisa sem pedir e
+     * exatamente o tipo de surpresa que este app promete nao dar.
+     */
+    private void launchStepOrClose(WebBridge bridge, Stage stage) {
+        String svc = System.getProperty("selftestLaunch");
+        if (svc == null || svc.isBlank()) {
             stage.close();
-        }, null)))));
+            return;
+        }
+        System.out.println("[selftest] pedindo start de '" + svc + "' pela UI");
+        bridge.exec("window.inspector.setView('oracle'); window.inspector.requestStart('"
+                + svc.replace("'", "") + "')");
+        step(60000, () -> {
+            System.out.println("[selftest] launch   " + bridge.probe());
+            snapshot(stage, "04-launch");
+            stage.close();
+        }, null);
+    }
+
+    /**
+     * Fotografa a janela em PNG quando {@code -DsnapshotDir} está setado.
+     *
+     * <p>Existe porque a janela nativa não é capturável de fora neste ambiente, e sem
+     * imagem não dá para pedir revisão visual a ninguém. O app fotografa a si mesmo.
+     * Sem a propriedade, não faz nada — não é caminho de dados.
+     */
+    private void snapshot(Stage stage, String name) {
+        String dir = System.getProperty("snapshotDir");
+        if (dir == null || dir.isBlank()) return;
+        try {
+            Path out = Paths.get(dir.trim());
+            java.nio.file.Files.createDirectories(out);
+            WritableImage img = stage.getScene().snapshot(null);
+            Path file = out.resolve(name + ".png");
+            ImageIO.write(toBufferedImage(img), "png", file.toFile());
+            System.out.println("[snapshot] " + file.toAbsolutePath()
+                    + " (" + (int) img.getWidth() + "x" + (int) img.getHeight() + ")");
+        } catch (IOException | RuntimeException ex) {
+            System.err.println("[snapshot] falhou " + name + ": " + ex);
+        }
+    }
+
+    /**
+     * Converte sem {@code javafx-swing}: aquele módulo existiria só para uma linha de
+     * conveniência e engordaria a app-image distribuída. {@code java.desktop} já vem
+     * no runtime, e a cópia pixel a pixel é barata para um snapshot ocasional.
+     */
+    private static BufferedImage toBufferedImage(WritableImage img) {
+        int w = (int) img.getWidth();
+        int h = (int) img.getHeight();
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        PixelReader pixels = img.getPixelReader();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                out.setRGB(x, y, pixels.getArgb(x, y));
+            }
+        }
+        return out;
     }
 
     /** Encadeia passos do smoke check sem aninhar Timeline na mao em cada ponto. */

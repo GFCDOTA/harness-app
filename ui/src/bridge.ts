@@ -1,4 +1,4 @@
-import type { RunPayload, View } from "./types";
+import type { LaunchResult, OraclePayload, RunPayload, View } from "./types";
 
 /**
  * A fronteira Java -> JS, do lado do JS. O Java chama estes metodos via
@@ -10,8 +10,13 @@ export type InspectorApi = {
   errors: string[];
   loadRun: (json: string) => number;
   appendEvent: (json: string) => number;
+  setOracle: (json: string) => number;
+  setLaunchResult: (json: string) => string;
   setView: (view: View) => View;
   probe: () => unknown;
+  /** A UI ENFILEIRA um pedido; o Java PUXA. Ver WebBridge.drainRequests. */
+  requestStart: (serviceId: string) => number;
+  __drain: () => string;
 };
 
 declare global {
@@ -21,26 +26,43 @@ declare global {
 }
 
 /** Estado observavel pela sonda, sem obrigar o React a expor internals. */
-export const latest: { run: RunPayload | null; view: View } = { run: null, view: "pipeline" };
+export const latest: {
+  run: RunPayload | null;
+  oracle: OraclePayload | null;
+  view: View;
+  lastLaunch: LaunchResult | null;
+} = { run: null, oracle: null, view: "pipeline", lastLaunch: null };
+
+/**
+ * Fila de pedidos da UI para o Java. Fica FORA do React de proposito: o Java puxa
+ * dela a cada 400 ms por executeScript, e um estado de componente nao estaria
+ * acessivel de fora. So ids conhecidos entram — o Java rejeita o resto.
+ */
+const queue: string[] = [];
 
 export function installBase() {
   if (window.inspector) return;
+  const notMounted = () => {
+    throw new Error("UI ainda nao montou");
+  };
   window.inspector = {
     ready: false,
     errors: [],
-    loadRun: () => {
-      throw new Error("UI ainda nao montou");
-    },
-    appendEvent: () => {
-      throw new Error("UI ainda nao montou");
-    },
-    setView: () => {
-      throw new Error("UI ainda nao montou");
-    },
-    probe
+    loadRun: notMounted,
+    appendEvent: notMounted,
+    setOracle: notMounted,
+    setLaunchResult: notMounted,
+    setView: notMounted,
+    probe,
+    requestStart: (serviceId: string) => queue.push(serviceId),
+    __drain: () => {
+      const out = JSON.stringify(queue);
+      queue.length = 0;
+      return out;
+    }
   };
   window.onerror = (m, _s, l, c) => {
-    window.inspector.errors.push(`onerror: ${m} @${l}:${c}`);
+    window.inspector.errors.push("onerror: " + m + " @" + l + ":" + c);
     return false;
   };
 }
@@ -58,9 +80,10 @@ function distinct(sel: string, attr: string): string[] {
   return [...out].sort();
 }
 
-/** Prova por MEDIDA, nao por captura de tela: a janela nativa nao e screenshotavel aqui. */
+/** Prova por MEDIDA: a janela nativa nao e screenshotavel neste ambiente. */
 export function probe(): unknown {
   const run = latest.run;
+  const oracle = latest.oracle;
   return {
     view: latest.view,
     runId: run?.runId ?? null,
@@ -71,12 +94,21 @@ export function probe(): unknown {
     domStepNodes: countAll(".step-node"),
     domTerminals: countAll(".terminal-node"),
     domEdges: countAll(".react-flow__edge"),
-    domPersonaIcons: countAll(".step-node svg"),
+    domOrderBadges: countAll(".sn-order"),
     personas: distinct(".step-node", "data-persona"),
     statuses: distinct(".step-node", "data-status"),
     externalNodes: document.querySelectorAll('.step-node[data-external="yes"]').length,
     domEventRows: countAll(".ev"),
     detailOpenFor: document.querySelector(".detail")?.getAttribute("data-detail-for") ?? null,
+    detailMetaRows: countAll(".dt-meta-row"),
+    oracleServices: oracle?.health.length ?? 0,
+    oracleUp: oracle?.upCount ?? 0,
+    oracleConsults: oracle?.consults.length ?? 0,
+    domHealthCards: countAll(".health-card"),
+    domConsultRows: countAll(".consult-row"),
+    consultOpenFor: document.querySelector(".consult-detail")?.getAttribute("data-consult-for") ?? null,
+    domStartButtons: countAll(".hc-start"),
+    lastLaunch: latest.lastLaunch ? latest.lastLaunch.serviceId + ":" + latest.lastLaunch.ok : null,
     errors: window.inspector.errors.slice(0, 10)
   };
 }

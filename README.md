@@ -24,7 +24,7 @@ packaging\build-app.cmd
 powershell -File packaging\make-shortcut.ps1
 ```
 
-## As duas visões
+## As três visões
 
 **Pipeline View** (principal) — o caixograma. Cada passo é um nó com um **boneco** que
 diz o papel (bibliotecário, tradutor de vetores, banco vetorial, modelo de linguagem,
@@ -34,6 +34,25 @@ Clique num nó → painel lateral com os eventos crus daquele passo.
 
 **Events View** (secundária) — a lista dos eventos, um a um. É debugger, não a
 experiência principal.
+
+**Oráculo** — a esteira está viva? (GPT-Docker `:8899`, Qdrant `:6333`, Ollama
+`:11434`, sondados a cada 5 s) e o histórico das consultas ao GPT, com a **prévia
+dos dois lados**: o que eu perguntei e o que ele respondeu, lado a lado.
+
+### Ligar serviço pelo app
+
+Serviço fora do ar ganha um botão **ligar**. Ele dispara **uma vez, por clique seu**.
+
+Essa é a linha que preserva a lição do NOC: o que custou caro foi ressurreição
+*automática* — watchdog, Scheduled Task, respawn em loop, PowerShell que o Defender
+flagava. Um botão que uma pessoa aperta é outra coisa. Este app **não** reinicia
+nada sozinho, **não** tenta de novo e **não** reage a "caiu".
+
+Os comandos são uma **lista fechada declarada no código** (`InspectorApp.ACTIONS`).
+A página só manda um id conhecido, nunca um comando — sem isso um painel web viraria
+um shell. E a ponte continua de uma direção só: a UI **enfileira** o pedido e o Java
+**puxa** (`WebBridge.drainRequests`), então nenhum objeto Java é exposto ao JS e o
+`JSObject` proibido segue fora.
 
 ### Como 27 eventos viram 8 caixas
 
@@ -92,7 +111,12 @@ não no código.
 
 ## Estado
 
-Pipeline View + Events View — **feito**. 56 testes verdes, nenhum importa JavaFX.
+Pipeline View (horizontal, numerada) + deep dive + Events View + Oráculo com botão
+de ligar — **feito**. 74 testes verdes, nenhum importa JavaFX.
+
+O app também **se fotografa**: `-DsnapshotDir=<dir>` grava PNG de cada visão durante
+o smoke check. Existe porque a janela nativa não é capturável de fora neste ambiente,
+e sem imagem não dá para pedir revisão visual a ninguém.
 
 Evidência do smoke check (`./mvnw javafx:run -Dselftest=true`) contra o trace real de
 27 eventos:
@@ -103,7 +127,8 @@ detalhe : clique no nó abre o painel (detailOpenFor=s1)
 events  : 27 linhas
 ```
 
-Não implementado ainda, por ordem: **SSE + `Last-Event-ID`** → health HTTP →
-geometry observability → learning mode → replay/scrubber.
+Não implementado ainda, por ordem: **SSE + `Last-Event-ID`** → geometry observability
+→ learning mode → replay/scrubber. (O health HTTP saiu de ordem: entrou junto com o
+painel do Oráculo, a pedido.)
 
 Regra-mãe herdada e intacta: *observability describes execution; it never changes execution.*

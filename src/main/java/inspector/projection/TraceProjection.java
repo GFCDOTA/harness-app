@@ -104,6 +104,12 @@ public final class TraceProjection {
                 m.put("status", e.status());
                 m.put("durationMs", e.durationMs());
                 m.put("detail", detail(e));
+                m.put("ts", e.ts());
+                m.put("spanId", e.spanId());
+                m.put("parentSpanId", e.parentSpanId());
+                // meta CRU, para o deep-dive: `detail` e curado e esconde chave que
+                // ninguem previu. O painel precisa poder mostrar tudo que existe.
+                m.put("meta", e.meta());
                 measurements.add(m);
             }
             n.put("measurements", measurements);
