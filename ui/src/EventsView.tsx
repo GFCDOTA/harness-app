@@ -15,9 +15,7 @@ export function EventsView({ boxes }: { boxes: Box[] }) {
           <span className="ev-body">
             <span className="ev-name">{b.name}</span>
             <span className="ev-sub">
-              <span className={`chip ${b.external ? "chip-ext" : "chip-loc"}`}>
-                {b.external ? "HTTP externo" : "local"}
-              </span>
+              <span className={`chip chip-${b.kindLabel.replace(/ /g, "-")}`}>{b.kindLabel}</span>
               {b.component ?? "—"}
               {b.detail ? " · " + b.detail : ""}
             </span>

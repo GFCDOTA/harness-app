@@ -17,6 +17,17 @@ const STATUS_MARK: Record<string, string> = {
   running: "…"
 };
 
+/**
+ * De onde para onde a chamada vai, em uma linha. Responde "fisicamente, onde essa
+ * coisa esta rodando?" sem obrigar a abrir o painel.
+ */
+function rota(s: Step): string {
+  const p = s.profile;
+  if (p.kind === "codigo local") return "no processo Python";
+  const alvo = p.host.split("—")[0].trim() || p.kindLabel;
+  return p.endpoint ? `Python → ${alvo} ${p.endpoint}` : `Python → ${alvo}`;
+}
+
 export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
   const s = data.step;
   const persona = personaFor(s.category, s.componentFamily);
@@ -26,32 +37,27 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
       className={`step-node st-${status}${selected ? " is-selected" : ""}`}
       data-persona={persona}
       data-status={status}
-      data-external={s.external ? "yes" : "no"}
+      data-kind={s.profile.kind}
       data-order={data.order}
       title={PERSONA_LABEL[persona]}
     >
       <Handle type="target" position={Position.Left} />
       <div className="sn-head">
-        {/* a ordem de execucao no proprio no: com o grafo afastado, o numero
-            continua legivel quando o texto ja nao esta. */}
         <span className="sn-order">{data.order}</span>
         <span className="sn-icon">
-          <PersonaIcon persona={persona} size={30} />
+          <PersonaIcon persona={persona} size={26} />
         </span>
         <span className="sn-status">
           {STATUS_MARK[status] ?? "?"} {status}
         </span>
       </div>
-      <div className="sn-title">{s.component ?? "—"}</div>
-      <div className="sn-sub">
-        <span className={`chip ${s.external ? "chip-ext" : "chip-loc"}`}>
-          {s.external ? "HTTP externo" : "local"}
-        </span>
-        <span className="sn-cat">{s.category}</span>
-      </div>
+      {/* Nome HUMANO primeiro: o nome tecnico e detalhe, nao manchete. */}
+      <div className="sn-title">{s.profile.humanName}</div>
+      <div className="sn-tech">{s.component ?? "—"}</div>
+      <div className="sn-route">{rota(s)}</div>
       <div className="sn-foot">
+        <span className={`chip chip-${s.profile.kind.replace(/ /g, "-")}`}>{s.profile.kindLabel}</span>
         <span className="sn-dur">{ms(s.durationMs)}</span>
-        <span className="sn-ev">{s.eventCount} ev</span>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>

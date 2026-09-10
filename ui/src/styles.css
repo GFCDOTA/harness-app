@@ -284,3 +284,33 @@ body {
   flex: 1; margin: 0; padding: 10px 12px; overflow: auto; min-height: 0;
   font: 11.5px/1.6 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; color: var(--ink);
 }
+
+/* ---------- card: nome humano, nome tecnico, rota ---------- */
+.sn-tech { font-size: 10.5px; color: var(--faint); font-family: ui-monospace, Consolas, monospace; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sn-route { font-size: 10.5px; color: var(--dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sn-foot { align-items: center; }
+
+.chip-codigo-local { background: var(--det-bg); border-color: var(--line-strong); color: var(--dim); }
+.chip-http-local { background: var(--obs-bg); border-color: var(--obs); color: var(--obs); }
+.chip-docker-local { background: var(--rag-bg); border-color: var(--rag); color: var(--rag); }
+.chip-llm-local { background: var(--llm-bg); border-color: var(--llm); color: var(--llm); }
+.chip-http-internet { background: var(--degraded-bg); border-color: var(--degraded); color: var(--degraded); }
+.chip-não-catalogado { background: var(--card-2); border-color: var(--line); color: var(--faint); }
+
+/* ---------- painel: secoes de aprendizado ---------- */
+.dt-sec { margin: 0 0 12px; }
+.dt-sec-h {
+  margin: 0 0 4px; font-size: 10px; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--faint);
+}
+.dt-line { display: grid; grid-template-columns: 78px 1fr; gap: 3px 10px; font-size: 12px; padding: 1px 0; }
+.dt-k { color: var(--faint); }
+.dt-v { word-break: break-word; }
+.dt-why { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
+.dt-concepts { display: flex; flex-wrap: wrap; gap: 4px; }
+.dt-concept {
+  font-size: 10.5px; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--line-strong); color: var(--dim); background: var(--card-2);
+}
+.dt-code { font-size: 11px; font-family: ui-monospace, Consolas, monospace; color: var(--dim); word-break: break-all; }
+.dt-uncat { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin: 0 0 12px; }

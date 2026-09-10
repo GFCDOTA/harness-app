@@ -12,6 +12,23 @@ export type Measurement = {
   meta: Record<string, unknown>;
 };
 
+/** O que o componente E — vem do catalogo deterministico do lado Java. */
+export type Profile = {
+  catalogued: boolean;
+  humanName: string;
+  kind: string;
+  kindLabel: string;
+  transport: string;
+  host: string;
+  endpoint: string;
+  role: string;
+  input: string;
+  output: string;
+  why: string;
+  code: string;
+  concepts: string[];
+};
+
 export type Step = {
   id: string;
   category: string | null;
@@ -19,8 +36,8 @@ export type Step = {
   componentFamily: string;
   status: string | null;
   durationMs: number | null;
-  external: boolean;
   fallbackEntry: boolean;
+  profile: Profile;
   seqFrom: number;
   seqTo: number;
   eventCount: number;
@@ -44,7 +61,8 @@ export type Box = {
   status: string | null;
   durationMs: number | null;
   detail: string;
-  external: boolean;
+  /** Onde aquilo roda, em palavras honestas. Substituiu o antigo booleano external. */
+  kindLabel: string;
 };
 
 export type RunPayload = {

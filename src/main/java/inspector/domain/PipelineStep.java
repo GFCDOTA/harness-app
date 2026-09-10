@@ -16,7 +16,6 @@ public record PipelineStep(
         String dominantComponent,
         String status,
         Double durationMs,
-        boolean external,
         boolean fallbackEntry,
         long seqFrom,
         long seqTo,

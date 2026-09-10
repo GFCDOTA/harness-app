@@ -101,21 +101,18 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges) {
                 dominant,
                 worstStatus(evs),
                 maxDuration(evs),
-                evs.stream().anyMatch(Pipeline::isExternalCall),
                 evs.stream().anyMatch(Pipeline::declaresFallback),
                 first.seq(),
                 evs.getLast().seq(),
                 evs);
     }
 
-    /**
-     * "Esta chamando uma API ou nao" — pelo prefixo do component, que e a convencao
-     * que o lado Python ja usa para servico externo.
+    /*
+     * Nao existe mais um booleano "externo" aqui. Ele dizia apenas "fora do processo
+     * Python", mas a UI o exibia como "HTTP externo" e isso lia como "chamou a
+     * internet" — Ollama e Qdrant rodam nesta maquina. Quem responde ONDE a coisa
+     * roda agora e o ComponentCatalog, com rotulo honesto.
      */
-    static boolean isExternalCall(TraceEvent e) {
-        String c = e.component();
-        return c != null && (c.startsWith("ollama.") || c.startsWith("qdrant.") || c.startsWith("http."));
-    }
 
     static boolean declaresFallback(TraceEvent e) {
         return Boolean.TRUE.equals(e.meta().get("fallbackTriggered"));

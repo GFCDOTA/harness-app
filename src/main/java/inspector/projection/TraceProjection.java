@@ -2,6 +2,8 @@ package inspector.projection;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import inspector.domain.ComponentCatalog;
+import inspector.domain.ComponentProfile;
 import inspector.domain.Pipeline;
 import inspector.domain.PipelineEdge;
 import inspector.domain.PipelineStep;
@@ -59,7 +61,7 @@ public final class TraceProjection {
             box.put("spanId", e.spanId());
             box.put("parentSpanId", e.parentSpanId());
             box.put("detail", detail(e));
-            box.put("external", isExternalCall(e));
+            box.put("kindLabel", ComponentCatalog.profileFor(e.component()).kindLabel());
             boxes.add(box);
         }
 
@@ -88,8 +90,8 @@ public final class TraceProjection {
             n.put("componentFamily", st.componentFamily());
             n.put("status", st.status());
             n.put("durationMs", st.durationMs());
-            n.put("external", st.external());
             n.put("fallbackEntry", st.fallbackEntry());
+            n.put("profile", profileMap(st.dominantComponent()));
             n.put("seqFrom", st.seqFrom());
             n.put("seqTo", st.seqTo());
             n.put("eventCount", st.eventCount());
@@ -142,14 +144,29 @@ public final class TraceProjection {
     }
 
     /**
-     * "Está chamando uma API ou não" — derivado do prefixo do component, que é a
-     * convenção que o lado Python já usa ({@code ollama.*}, {@code qdrant.*} são
-     * serviço externo por HTTP; o resto é código local).
+     * O que o componente É — nome humano, onde roda, o que recebe, o que devolve.
+     *
+     * <p>Substituiu o booleano {@code external}, que dizia apenas "fora do processo
+     * Python" mas aparecia na tela como "HTTP externo" e induzia ao erro: Ollama e
+     * Qdrant rodam NESTA máquina.
      */
-    static boolean isExternalCall(TraceEvent e) {
-        String c = e.component();
-        if (c == null) return false;
-        return c.startsWith("ollama.") || c.startsWith("qdrant.") || c.startsWith("http.");
+    Map<String, Object> profileMap(String component) {
+        ComponentProfile p = ComponentCatalog.profileFor(component);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("catalogued", p.catalogued());
+        m.put("humanName", p.humanName());
+        m.put("kind", p.kind());
+        m.put("kindLabel", p.kindLabel());
+        m.put("transport", p.transport());
+        m.put("host", p.host());
+        m.put("endpoint", p.endpoint());
+        m.put("role", p.role());
+        m.put("input", p.input());
+        m.put("output", p.output());
+        m.put("why", p.why());
+        m.put("code", p.code());
+        m.put("concepts", p.concepts());
+        return m;
     }
 
     static String detail(TraceEvent e) {

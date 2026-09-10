@@ -30,7 +30,22 @@ powershell -File packaging\make-shortcut.ps1
 diz o papel (bibliotecário, tradutor de vetores, banco vetorial, modelo de linguagem,
 arquiteto, fiscal, mecânico), o status, a duração, e um chip `HTTP externo` / `local`.
 A aresta de **fallback** sai tracejada e âmbar, porque desvio precisa parecer desvio.
-Clique num nó → painel lateral com os eventos crus daquele passo.
+Clique num nó → painel com seções fixas: **identidade**, **onde roda**, **entra e
+sai**, **por que existe**, **conceitos para estudar**, **código** e só então **nesta
+execução** + os eventos crus.
+
+### O rótulo diz onde a coisa roda
+
+A UI dizia `HTTP externo` para Ollama e Qdrant. Estava errado como comunicação: no
+código, "externo" queria dizer só "fora do processo Python"; na tela lia-se "chamou
+uma API na internet". **Ollama e Qdrant rodam nesta máquina.** Os rótulos agora são
+`código local`, `HTTP local`, `Docker local`, `LLM local` — e existe `HTTP internet`
+separado para quando a chamada realmente sair daqui.
+
+O conteúdo explicativo vem de `ComponentCatalog`, escrito à mão e **determinístico**.
+Não chama LLM: numa ferramenta de estudo, explicação inventada é pior que silêncio —
+componente fora do catálogo aparece com os campos vazios e um aviso, não com um
+palpite.
 
 **Events View** (secundária) — a lista dos eventos, um a um. É debugger, não a
 experiência principal.

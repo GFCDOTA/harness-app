@@ -82,7 +82,7 @@ export function App() {
   const steps = run.pipeline.nodes;
   const selectedIdx = steps.findIndex((s) => s.id === selectedId);
   const selected = selectedIdx >= 0 ? steps[selectedIdx]! : null;
-  const external = steps.filter((s) => s.external).length;
+  const foraDoProcesso = steps.filter((s) => s.profile.kind !== "codigo local").length;
   const oracleDown = oracle ? oracle.serviceCount - oracle.upCount : 0;
 
   return (
@@ -93,7 +93,7 @@ export function App() {
           <div className="top-sum">
             <b>{steps.length}</b> passos · <b>{run.eventCount}</b> eventos ·{" "}
             <b>{secs(run.durationMs)}</b> · terminal <b>{run.terminalStatus ?? "—"}</b> ·{" "}
-            <b>{external}</b> passos com HTTP externo
+            <b>{foraDoProcesso}</b> passos saem do processo Python (todos nesta máquina)
           </div>
           <div className="top-src">{run.source}</div>
         </div>

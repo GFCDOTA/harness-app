@@ -42,28 +42,40 @@ class TraceProjectionTest {
     }
 
     @Test
-    void marcaChamadaHttpExternaPeloPrefixoDoComponent() throws Exception {
+    void oRotuloDizONDE_aCoisaRodaEnaoOhVagoExterno() throws Exception {
         for (JsonNode b : project().get("boxes")) {
             String comp = b.get("component").asText();
-            boolean external = b.get("external").asBoolean();
-            if (comp.startsWith("ollama.") || comp.startsWith("qdrant.")) {
-                assertTrue(external, comp + " e servico externo e deveria estar marcado");
+            String rotulo = b.get("kindLabel").asText();
+            assertNotEquals("HTTP externo", rotulo,
+                    "esse rotulo induzia a pensar em API na internet");
+            if (comp.startsWith("ollama.deepseek")) {
+                assertEquals("LLM local", rotulo, comp);
+            } else if (comp.startsWith("ollama.")) {
+                assertEquals("HTTP local", rotulo, comp);
+            } else if (comp.startsWith("qdrant.")) {
+                assertEquals("Docker local", rotulo, comp);
             } else {
-                assertFalse(external, comp + " e codigo local e nao deveria estar marcado");
+                assertEquals("código local", rotulo, comp);
             }
         }
     }
 
     @Test
-    void contaExatamenteAsQuatroChamadasExternasDaFixture() throws Exception {
-        long ext = 0;
+    void nenhumaChamadaDestaExecucaoSaiDaMaquina() throws Exception {
         for (JsonNode b : project().get("boxes")) {
-            if (b.get("external").asBoolean()) ext++;
+            assertNotEquals("HTTP internet", b.get("kindLabel").asText(),
+                    "Ollama e Qdrant rodam nesta maquina: " + b.get("component").asText());
         }
-        assertEquals(4, ext,
-                "3 do ollama (embed started + embed finished + llm) + 1 do qdrant. "
-                        + "O LLM tambem e chamada HTTP externa: e justamente o que a "
-                        + "caixa precisa deixar obvio.");
+    }
+
+    @Test
+    void oNoTrazONomeHumanoEondeRoda() throws Exception {
+        for (JsonNode n : project().get("pipeline").get("nodes")) {
+            JsonNode perfil = n.get("profile");
+            assertNotNull(perfil, "todo no precisa de perfil");
+            assertFalse(perfil.get("humanName").asText().isBlank());
+            assertFalse(perfil.get("kindLabel").asText().isBlank());
+        }
     }
 
     @Test

@@ -92,7 +92,6 @@ class PipelineTest {
         PipelineStep qdrant = p.steps().stream()
                 .filter(st -> "qdrant".equals(st.componentFamily())).findFirst().orElseThrow();
         assertEquals("failed", qdrant.status());
-        assertTrue(qdrant.external(), "qdrant e HTTP externo");
     }
 
     @Test
@@ -132,10 +131,11 @@ class PipelineTest {
         Pipeline p = Pipeline.from(load(real));
         System.out.println("--- pipeline derivado do trace real ---");
         for (PipelineStep st : p.steps()) {
-            System.out.printf("%-4s %-14s %-28s %-9s %10s ext=%-5s fb=%-5s seq %d-%d (%d ev)%n",
-                    st.id(), st.category(), st.dominantComponent(), st.status(),
+            ComponentProfile perfil = ComponentCatalog.profileFor(st.dominantComponent());
+            System.out.printf("%-4s %-24s %-28s %-9s %10s %-14s fb=%-5s seq %d-%d (%d ev)%n",
+                    st.id(), perfil.humanName(), st.dominantComponent(), st.status(),
                     st.durationMs() == null ? "-" : Math.round(st.durationMs()) + "ms",
-                    st.external(), st.fallbackEntry(), st.seqFrom(), st.seqTo(), st.eventCount());
+                    perfil.kindLabel(), st.fallbackEntry(), st.seqFrom(), st.seqTo(), st.eventCount());
         }
         assertEquals(8, p.steps().size(), "o alvo pedagogico e 7-8 caixas");
         assertEquals(7, p.edges().size());
