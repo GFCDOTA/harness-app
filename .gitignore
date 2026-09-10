@@ -3,5 +3,6 @@ ui/node_modules/
 ui/tsconfig.tsbuildinfo
 traces-local/
 consults-local/
+app/
 dist/
 shots/

@@ -50,3 +50,26 @@ chamando `dist/<App>/runtime/bin/java.exe` — ele nao existe. Para smoke check
 Caminho absoluto desta maquina (o diretorio de traces) entra por
 `--java-options "-DtraceDir=..."` no empacotamento, nao no codigo. O codigo continua
 generico e testavel; a imagem carrega o que e especifico da maquina.
+
+## 5. Apagar a app-image com o app ABERTO envenena o diretorio
+
+Sintoma: apos `rmdir` + rebuild no MESMO caminho, o launcher sobe como um processo
+de ~16 MB, sem janela, e o JVM nunca inicia. Nenhuma mensagem util.
+
+O diagnostico so fecha por eliminacao, e vale registrar a sequencia porque cada
+hipotese obvia estava errada:
+
+| Hipotese | Teste | Resultado |
+|---|---|---|
+| falta modulo no runtime (`java.net.http`, `java.desktop`) | ler `runtime/release` | ambos PRESENTES — hipotese morta |
+| o `--icon` gerado por PIL quebra o launcher | build com icone em outro caminho | **subiu** — icone inocente |
+| `-DconsultsDir` com barras invertidas | build com a opcao em outro caminho | **subiu** — opcao inocente |
+| o NOME "HarnessApp" | mesmo nome, caminho diferente | **subiu** — nome inocente |
+| o CAMINHO | rebuild em `app/` em vez de `dist/` | **subiu** |
+
+Conclusao: o diretorio fica num estado de pending-delete do Windows quando e apagado
+com o `.exe` ainda em execucao, e a imagem nova escrita ali nasce quebrada. O
+`build-app.cmd` passou a fazer `taskkill /F /IM HarnessApp.exe` ANTES de apagar.
+
+Corolario do item 2: nao basta "rebuild, nunca patch" — e **feche o app antes do
+rebuild**, e prefira um caminho que nunca foi apagado sob uso.

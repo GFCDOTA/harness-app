@@ -15,15 +15,19 @@ popd
 echo [2/4] build do Java (testes incluidos)
 call mvnw.cmd -B package || goto :fail
 
-echo [3/4] limpando imagem anterior
-if exist "dist\HarnessApp" rmdir /s /q "dist\HarnessApp"
+echo [3/4] fechando o app e limpando a imagem anterior
+REM Apagar a pasta com o app ABERTO deixa o diretorio num estado em que o novo
+REM launcher sobe e o JVM nunca inicia (16 MB parado, sem janela). Fecha antes.
+taskkill /F /IM HarnessApp.exe >nul 2>&1
+timeout /t 2 /nobreak >nul
+if exist "app\HarnessApp" rmdir /s /q "app\HarnessApp"
 
 echo [4/4] jpackage
 "%JAVA_HOME%\bin\jpackage.exe" ^
   --type app-image ^
   --name HarnessApp ^
   --app-version 0.1.0 ^
-  --dest dist ^
+  --dest app ^
   --input target\dist ^
   --main-jar harness-app-0.1.0-SNAPSHOT.jar ^
   --main-class inspector.ui.Launcher ^
