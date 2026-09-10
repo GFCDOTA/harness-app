@@ -31,7 +31,8 @@ echo [4/4] jpackage
   --vendor "Felipe Modesto" ^
   --description "AI Pipeline Inspector" ^
   --java-options "--enable-native-access=ALL-UNNAMED" ^
-  --java-options "-DtraceDir=E:\Claude\apps\sketchup-mcp\.ai_bridge\traces" || goto :fail
+  --java-options "-DtraceDir=E:\Claude\apps\sketchup-mcp\.ai_bridge\traces" ^
+  --java-options "-DconsultsDir=E:\Claude\apps\sketchup-mcp\.ai_bridge\responses" || goto :fail
 
 echo.
 echo OK: dist\HarnessApp\HarnessApp.exe
