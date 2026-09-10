@@ -12,6 +12,31 @@ export type Measurement = {
   meta: Record<string, unknown>;
 };
 
+/** Conferencia das afirmacoes sobre o codigo, feita contra o repo real. */
+export type Verification = {
+  checked: boolean;
+  moduleFound: boolean;
+  symbolFound: boolean;
+  librariesFound: string[];
+  librariesMissing: string[];
+  fullyVerified: boolean;
+  note: string;
+};
+
+/** QUEM executa. Campos de codigo sao FATO CONFERIDO; pattern e explicacao. */
+export type Implementation = {
+  declared: boolean;
+  language: string;
+  module: string;
+  symbol: string;
+  libraries: string[];
+  runtime: string;
+  decision: string;
+  pattern: string;
+  llmInvolved: boolean;
+  verification: Verification;
+};
+
 /** O que o componente E — vem do catalogo deterministico do lado Java. */
 export type Profile = {
   catalogued: boolean;
@@ -27,6 +52,7 @@ export type Profile = {
   why: string;
   code: string;
   concepts: string[];
+  implementation: Implementation;
 };
 
 export type Step = {

@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { PersonaIcon, PERSONA_LABEL, personaFor } from "./personas";
 import type { Step } from "./types";
+import { decisionClass } from "./DetailPanel";
 
 export type StepFlowNode = Node<{ step: Step; order: number }, "step">;
 
@@ -55,6 +56,13 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
       <div className="sn-title">{s.profile.humanName}</div>
       <div className="sn-tech">{s.component ?? "—"}</div>
       <div className="sn-route">{rota(s)}</div>
+      <div className="sn-decision">
+        {s.profile.implementation.decision ? (
+          <span className={"decision decision-" + decisionClass(s.profile.implementation.decision)}>
+            {s.profile.implementation.decision}
+          </span>
+        ) : null}
+      </div>
       <div className="sn-foot">
         <span className={`chip chip-${s.profile.kind.replace(/ /g, "-")}`}>{s.profile.kindLabel}</span>
         <span className="sn-dur">{ms(s.durationMs)}</span>

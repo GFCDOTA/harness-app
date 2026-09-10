@@ -14,6 +14,7 @@ import inspector.source.GptConsultLog;
 import inspector.source.HttpHealthProbe;
 import inspector.source.ProcessServiceLauncher;
 import inspector.source.JsonlReplayTraceSource;
+import inspector.source.SourceVerifier;
 import inspector.source.TraceLocator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.animation.KeyFrame;
@@ -65,7 +66,19 @@ public final class InspectorApp extends Application {
      */
     private static final Path CONVENTIONAL_TRACE_DIR = Paths.get("traces-local");
 
-    private final TraceProjection projection = new TraceProjection();
+    /**
+     * Onde vive o código do pipeline, para conferir o que o catálogo afirma. Ausente
+     * não é erro: a UI passa a dizer "não verificado" em vez de afirmar.
+     */
+    private static SourceVerifier resolvePipelineRepo() {
+        String prop = System.getProperty("pipelineRepo");
+        if (prop != null && !prop.isBlank()) return new SourceVerifier(Paths.get(prop.trim()));
+        String env = System.getenv("INSPECTOR_PIPELINE_REPO");
+        if (env != null && !env.isBlank()) return new SourceVerifier(Paths.get(env.trim()));
+        return new SourceVerifier(Paths.get("..", "sketchup-mcp"));
+    }
+
+    private final TraceProjection projection = new TraceProjection(resolvePipelineRepo());
     private final OracleProjection oracleProjection = new OracleProjection();
     private final HealthProbe healthProbe = new HttpHealthProbe();
 
@@ -310,6 +323,11 @@ public final class InspectorApp extends Application {
             System.out.println("[selftest] detalhe  " + bridge.probe());
             snapshot(stage, "02-detalhe");
         },
+        () -> step(400, () -> bridge.exec("document.querySelectorAll('.dt-tab')[1].click()"),
+        () -> step(500, () -> {
+            System.out.println("[selftest] implem  " + bridge.probe());
+            snapshot(stage, "02b-implementacao");
+        },
         () -> step(400, () -> bridge.exec("window.inspector.setView('oracle')"),
         () -> step(600, () -> {
             System.out.println("[selftest] oraculo  " + bridge.probe());
@@ -319,7 +337,7 @@ public final class InspectorApp extends Application {
         () -> step(400, () -> {
             System.out.println("[selftest] events   " + bridge.probe());
             launchStepOrClose(bridge, stage);
-        }, null))))))));
+        }, null))))))))));
     }
 
     /**

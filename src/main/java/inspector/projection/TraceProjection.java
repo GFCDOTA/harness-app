@@ -4,6 +4,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import inspector.domain.ComponentCatalog;
 import inspector.domain.ComponentProfile;
+import inspector.domain.ExecutionFacts;
+import inspector.domain.ImplementationCatalog;
+import inspector.domain.SourceVerification;
+import inspector.source.SourceVerifier;
 import inspector.domain.Pipeline;
 import inspector.domain.PipelineEdge;
 import inspector.domain.PipelineStep;
@@ -36,6 +40,21 @@ public final class TraceProjection {
     private static final int DETAIL_MAX = 180;
 
     private final ObjectMapper mapper = new ObjectMapper();
+
+    /**
+     * Confere as afirmações sobre o código antes de elas virarem fato na tela.
+     * {@code null} = sem verificador; a UI mostra "não verificado", que é diferente
+     * de "não existe".
+     */
+    private final SourceVerifier verifier;
+
+    public TraceProjection() {
+        this(null);
+    }
+
+    public TraceProjection(SourceVerifier verifier) {
+        this.verifier = verifier;
+    }
 
     public String toJson(Run run, String sourceDescription) {
         try {
@@ -166,6 +185,40 @@ public final class TraceProjection {
         m.put("why", p.why());
         m.put("code", p.code());
         m.put("concepts", p.concepts());
+        m.put("implementation", implementationMap(component));
+        return m;
+    }
+
+    /**
+     * QUEM executa — com PROCEDÊNCIA. Cada campo do bloco {@code impl} é afirmação
+     * sobre o código e vem acompanhado do resultado da verificação; {@code pattern} e
+     * {@code concepts} são explicação e estão marcados como tal.
+     */
+    Map<String, Object> implementationMap(String component) {
+        ExecutionFacts f = ImplementationCatalog.factsFor(component);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("declared", !f.impl().isEmpty());
+        m.put("language", f.impl().language());
+        m.put("module", f.impl().module());
+        m.put("symbol", f.impl().symbol());
+        m.put("libraries", f.impl().libraries());
+        m.put("runtime", f.impl().runtime());
+        m.put("decision", f.decision());
+        m.put("pattern", f.pattern());
+        m.put("llmInvolved", f.llmInvolved());
+
+        SourceVerification v = verifier == null
+                ? SourceVerification.notChecked("verificador não configurado")
+                : verifier.verify(f.impl());
+        Map<String, Object> vm = new LinkedHashMap<>();
+        vm.put("checked", v.checked());
+        vm.put("moduleFound", v.moduleFound());
+        vm.put("symbolFound", v.symbolFound());
+        vm.put("librariesFound", v.librariesFound());
+        vm.put("librariesMissing", v.librariesMissing());
+        vm.put("fullyVerified", v.fullyVerified());
+        vm.put("note", v.note());
+        m.put("verification", vm);
         return m;
     }
 

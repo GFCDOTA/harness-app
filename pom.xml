@@ -32,6 +32,8 @@
     <snapshotDir/>
     <!-- passo opt-in do smoke check que exercita o botao de ligar -->
     <selftestLaunch/>
+    <!-- repo do pipeline Python, para verificar as afirmacoes do catalogo -->
+    <pipelineRepo/>
   </properties>
 
   <dependencies>
@@ -107,6 +109,7 @@
             <option>-DconsultsDir=${consultsDir}</option>
             <option>-DsnapshotDir=${snapshotDir}</option>
             <option>-DselftestLaunch=${selftestLaunch}</option>
+            <option>-DpipelineRepo=${pipelineRepo}</option>
           </options>
         </configuration>
       </plugin>
