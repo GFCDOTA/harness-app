@@ -2,6 +2,9 @@ package inspector.projection;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import inspector.domain.Pipeline;
+import inspector.domain.PipelineEdge;
+import inspector.domain.PipelineStep;
 import inspector.domain.Run;
 import inspector.domain.TraceEvent;
 
@@ -68,7 +71,68 @@ public final class TraceProjection {
         out.put("durationMs", run.durationMs());
         out.put("terminalStatus", run.terminalStatus());
         out.put("boxes", boxes);
+        out.put("pipeline", pipelineOf(run));
         return out;
+    }
+
+    /** A visao de grafo: passos e ligacoes, para a Pipeline View. */
+    Map<String, Object> pipelineOf(Run run) {
+        Pipeline p = Pipeline.from(run);
+
+        List<Map<String, Object>> nodes = new ArrayList<>(p.steps().size());
+        for (PipelineStep st : p.steps()) {
+            Map<String, Object> n = new LinkedHashMap<>();
+            n.put("id", st.id());
+            n.put("category", st.category());
+            n.put("component", st.dominantComponent());
+            n.put("componentFamily", st.componentFamily());
+            n.put("status", st.status());
+            n.put("durationMs", st.durationMs());
+            n.put("external", st.external());
+            n.put("fallbackEntry", st.fallbackEntry());
+            n.put("seqFrom", st.seqFrom());
+            n.put("seqTo", st.seqTo());
+            n.put("eventCount", st.eventCount());
+            n.put("detail", stepDetail(st));
+
+            List<Map<String, Object>> measurements = new ArrayList<>(st.eventCount());
+            for (TraceEvent e : st.events()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("seq", e.seq());
+                m.put("name", e.name());
+                m.put("component", e.component());
+                m.put("status", e.status());
+                m.put("durationMs", e.durationMs());
+                m.put("detail", detail(e));
+                measurements.add(m);
+            }
+            n.put("measurements", measurements);
+            nodes.add(n);
+        }
+
+        List<Map<String, Object>> edges = new ArrayList<>(p.edges().size());
+        for (PipelineEdge e : p.edges()) {
+            Map<String, Object> ed = new LinkedHashMap<>();
+            ed.put("id", e.id());
+            ed.put("source", e.from());
+            ed.put("target", e.to());
+            ed.put("fallback", e.fallback());
+            edges.add(ed);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("nodes", nodes);
+        out.put("edges", edges);
+        return out;
+    }
+
+    /** Detalhe do passo: o primeiro evento do grupo que tenha algo a dizer. */
+    static String stepDetail(PipelineStep st) {
+        for (TraceEvent e : st.events()) {
+            String d = detail(e);
+            if (!d.isEmpty()) return d;
+        }
+        return "";
     }
 
     /**

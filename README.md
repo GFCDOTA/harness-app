@@ -1,71 +1,109 @@
-# inspector-desktop — host desktop do AI Pipeline Inspector
+# Harness App — AI Pipeline Inspector
 
-Janela nativa que mostra, caixa por caixa, o que o pipeline de IA/RAG fez numa run:
+Janela nativa que mostra **o que o pipeline de IA/RAG realmente fez** numa run:
 o que foi RAG, o que foi LLM, o que foi harness, o que foi código determinístico —
 e quais passos bateram numa **API externa** contra os que rodaram **local**.
 
-Decisão de arquitetura: **ADR-001** em `docs/specs/AI_PIPELINE_INSPECTOR.md` §7.1.
+Consome os traces emitidos pelo `core/observability` do `sketchup-mcp`. É **cliente**
+do trace; não é um segundo backend.
 
-## Rodar
+## Abrir
+
+Clique em **Harness App** na área de trabalho. Ele abre no trace mais recente.
+
+Durante desenvolvimento:
 
 ```bash
 JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-25.0.2.10-hotspot" ./mvnw javafx:run
 ```
 
-Sem argumento ele abre o `.jsonl` **mais recente** de `../.ai_bridge/traces/`.
-Para um trace específico: `./mvnw javafx:run -Dtrace=../.ai_bridge/traces/<arquivo>.jsonl`
-
-Testes (não precisam de JavaFX nem de tela):
+Regerar o app clicável (UI + Java + jpackage + atalho):
 
 ```bash
-JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-25.0.2.10-hotspot" ./mvnw test
+packaging\build-app.cmd
+powershell -File packaging\make-shortcut.ps1
 ```
 
-Smoke check não-interativo (abre, mede o DOM, imprime e fecha):
+## As duas visões
 
-```bash
-JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-25.0.2.10-hotspot" ./mvnw javafx:run -Dselftest=true
-```
+**Pipeline View** (principal) — o caixograma. Cada passo é um nó com um **boneco** que
+diz o papel (bibliotecário, tradutor de vetores, banco vetorial, modelo de linguagem,
+arquiteto, fiscal, mecânico), o status, a duração, e um chip `HTTP externo` / `local`.
+A aresta de **fallback** sai tracejada e âmbar, porque desvio precisa parecer desvio.
+Clique num nó → painel lateral com os eventos crus daquele passo.
 
-## O que ele é, e o que não é
+**Events View** (secundária) — a lista dos eventos, um a um. É debugger, não a
+experiência principal.
 
-- **É** um cliente do trace. **Não é** um servidor — não existe segundo backend HTTP.
-- **Observa.** Não reinicia nada, não cria watchdog, não registra Scheduled Task, não
-  chama PowerShell. Serviço fora do ar aparece como fora do ar. Fechar a janela mata o
-  processo (não existe `System.exit` no código; quem encerra é o toolkit).
+### Como 27 eventos viram 8 caixas
+
+A regra é derivada dos dados, sem apelido inventado:
+
+1. se o evento traz `meta.harnessKind`, essa é a chave do passo — é o próprio lado
+   Python declarando "isto é uma camada de harness", e é o que colapsa os 10 eventos
+   do correction loop num passo só;
+2. senão, a chave é `category` + **família do component** (trecho antes do primeiro
+   ponto: `gate.opening_host` → `gate`). É o que funde os 3 gates numa caixa e separa
+   embedding de banco vetorial.
+
+Corridas consecutivas de mesma chave viram um passo. Voltar a uma chave anterior abre
+passo novo — porque o pipeline realmente passou por ali de novo. `run.started` e
+`run.finished` não são passos: são os terminais, e a UI desenha início e fim.
 
 ## Desenho
 
 ```
-TraceSource → domain (Run/Span/TraceEvent) → TraceProjection → JSON → React
+TraceSource → domain (Run/Span/TraceEvent/Pipeline) → TraceProjection → JSON → React
 ```
 
-Uma direção só. E as travas que sustentam isso:
+Uma direção só. As travas que sustentam isso:
 
 | Trava | Por quê |
 |---|---|
-| Domínio sem Jackson e sem JavaFX | `TraceEvent`/`Run`/`Span` são records puros; quem lê JSON é o adapter, quem desenha é a UI |
-| Bridge **sem** `netscape.javascript.JSObject` | está *deprecated e marcado para remoção*; o Java só chama `window.inspector.loadRun(json)` / `appendEvent(json)` via `executeScript`, e **nenhum objeto Java é exposto ao JS** |
-| React **vendorizado** (`web/vendor/`) | app de observabilidade não pode morrer porque a CDN caiu — falharia exatamente quando é mais necessário |
-| Sem Babel | `createElement` dispensa transpilação em runtime (139 KB em vez de 2,4 MB) e o mesmo arquivo serve a superfície browser opcional |
-| `category` é `String`, não enum | o catálogo é fechado **no lado Python**, que é o dono da taxonomia; um enum aqui viraria exceção quando aparecesse categoria nova, e o Inspector existe para observar, não para recusar |
-| Medida ausente é `null`, nunca `0.0` | `0.0` faria a UI desenhar "instantâneo" onde não houve medição |
+| Domínio sem Jackson e sem JavaFX | records puros; quem lê JSON é o adapter, quem desenha é a UI |
+| Bridge **sem** `netscape.javascript.JSObject` | está *deprecated e marcado para remoção*; o Java só chama `window.inspector.loadRun(json)` via `executeScript`, e **nenhum objeto Java é exposto ao JS** |
+| Assets **empacotados**, zero CDN | app de observabilidade não pode morrer porque a internet caiu — falharia exatamente quando é mais necessário. O Vite gera bundle estático em `src/main/resources/web/`, versionado, e o `./mvnw javafx:run` funciona sem npm |
+| `category` é `String`, não enum | o catálogo é fechado no lado Python, dono da taxonomia; um enum aqui viraria exceção quando aparecesse categoria nova, e o Inspector existe para observar, não para recusar |
+| Medida ausente é `null`, nunca `0.0` | zero faria a UI desenhar "instantâneo" onde não houve medição |
+| `started` não é desfecho | se competisse na severidade, um passo que abriu **e terminou** apareceria como "started" para sempre. Sem desfecho + com abertura = `running` |
+| `Launcher` não estende `Application` | é o que permite JavaFX no classpath e o `jpackage` sem jlink |
 
 `SseTraceSource` existe e **falha alto**: é a costura do tempo real, e o teste que
-prova a exceção é o que impede a fase seguinte de ser esquecida em silêncio. Quando o
-SSE entrar, muda **só o adapter** — domínio e UI já falam `TraceEvent`.
+prova a exceção impede a fase seguinte de ser esquecida em silêncio. Quando o SSE
+entrar, muda **só o adapter** — domínio e UI já falam `TraceEvent`.
+
+## O que ele não é
+
+Não é servidor e não é supervisor: **observa**. Não reinicia nada, não cria watchdog,
+não registra Scheduled Task, não chama PowerShell para ressuscitar processo. Serviço
+fora do ar aparece como fora do ar. Fechar a janela mata o processo — não existe
+`System.exit` no código, quem encerra é o toolkit.
+
+## Onde ele acha os traces
+
+Precedência: `-Dtrace=<arquivo>` → `-DtraceDir=<dir>` → `INSPECTOR_TRACE_DIR` →
+`traces-local/` ao lado do app. Sem nenhuma fonte ele **falha ensinando as opções**,
+em vez de abrir vazio fingindo normalidade.
+
+O app empacotado carrega o diretório de traces do `sketchup-mcp` embutido como
+`-DtraceDir` (ver `packaging/build-app.cmd`). É o único ponto onde um caminho desta
+máquina aparece — de propósito: config de máquina vive na camada de empacotamento,
+não no código.
 
 ## Estado
 
-Vertical slice 1 (replay do JSONL) — **feito**. 35 testes verdes.
-Evidência do smoke check contra o trace real de 27 eventos:
+Pipeline View + Events View — **feito**. 56 testes verdes, nenhum importa JavaFX.
+
+Evidência do smoke check (`./mvnw javafx:run -Dselftest=true`) contra o trace real de
+27 eventos:
 
 ```
-boxCount=27  categories={OBSERVABILITY:2, RAG:9, HARNESS:11, LLM:2, DETERMINISTIC:3}
-externalCalls=6  distinctBoxColors=5  listScrollH=1975 vs listClientH=697  errors=[]
+pipeline: 8 passos · 9 arestas · 1 fallback · 7 personas · 3 nós HTTP externos · errors=[]
+detalhe : clique no nó abre o painel (detailOpenFor=s1)
+events  : 27 linhas
 ```
 
-Não implementado ainda, por ordem: SSE + `Last-Event-ID` → health HTTP →
+Não implementado ainda, por ordem: **SSE + `Last-Event-ID`** → health HTTP →
 geometry observability → learning mode → replay/scrubber.
 
 Regra-mãe herdada e intacta: *observability describes execution; it never changes execution.*

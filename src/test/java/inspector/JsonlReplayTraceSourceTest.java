@@ -91,8 +91,8 @@ class JsonlReplayTraceSourceTest {
 
     @Test
     void traceRealDeBanheiroTem27EventosQuandoPresente() {
-        Path real = Paths.get("..", ".ai_bridge", "traces", "run_20260827T021348Z_banho.jsonl");
-        assumeTrue(Files.exists(real), "trace real ausente (gitignored): teste pulado");
+        Path real = Paths.get("traces-local", "run_20260827T021348Z_banho.jsonl");
+        assumeTrue(Files.exists(real), "trace real ausente em traces-local/ (gitignored): teste pulado");
         Run run = Run.fromEvents(collect(new JsonlReplayTraceSource(real)));
         assertEquals(27, run.eventCount());
         assertEquals("run_20260827T021348Z_banho", run.runId());

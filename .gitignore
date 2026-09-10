@@ -1,1 +1,4 @@
 target/
+ui/node_modules/
+traces-local/
+dist/

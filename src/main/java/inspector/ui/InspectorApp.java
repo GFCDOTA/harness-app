@@ -36,11 +36,12 @@ import java.util.List;
 public final class InspectorApp extends Application {
 
     /**
-     * Vizinhança do sketchup-mcp: vale enquanto este app estiver ao lado dele. Em
-     * repositório próprio isto simplesmente não existe, e o TraceLocator exige
-     * -Dtrace / -DtraceDir / INSPECTOR_TRACE_DIR em vez de abrir vazio.
+     * Convenção do app: um diretório {@code traces-local/} ao lado dele. É
+     * gitignored — trace é dado de execução, não fonte. Se não existir, o
+     * TraceLocator exige -Dtrace / -DtraceDir / INSPECTOR_TRACE_DIR em vez de
+     * abrir vazio fingindo normalidade.
      */
-    private static final Path CONVENTIONAL_TRACE_DIR = Paths.get("..", ".ai_bridge", "traces");
+    private static final Path CONVENTIONAL_TRACE_DIR = Paths.get("traces-local");
 
     private final TraceProjection projection = new TraceProjection();
 
@@ -59,9 +60,9 @@ public final class InspectorApp extends Application {
         stage.setScene(new Scene(new BorderPane(view), 900, 760));
         stage.show();
 
-        URL page = InspectorApp.class.getResource("/web/inspector.html");
+        URL page = InspectorApp.class.getResource("/web/index.html");
         if (page == null) {
-            throw new IllegalStateException("recurso /web/inspector.html não empacotado");
+            throw new IllegalStateException("recurso /web/index.html não empacotado");
         }
 
         engine.getLoadWorker().stateProperty().addListener((obs, old, now) -> {
@@ -110,11 +111,30 @@ public final class InspectorApp extends Application {
                 e -> whenReady(bridge, attempt + 1, then))).play();
     }
 
+    /**
+     * Smoke check nao-interativo. Prova por MEDIDA do DOM, nao por captura de tela:
+     * janela nativa nao e screenshotavel neste ambiente. Percorre as tres coisas que
+     * podem quebrar de forma silenciosa: o grafo, o clique->painel, e a Events View.
+     */
     private void selfTest(WebBridge bridge, Stage stage) {
-        new Timeline(new KeyFrame(Duration.millis(700), e -> {
-            System.out.println("[selftest] " + bridge.probe());
+        step(700, () -> System.out.println("[selftest] pipeline " + bridge.probe()),
+        () -> step(400, () -> bridge.exec("document.querySelector('.react-flow__node-step')"
+                        + ".dispatchEvent(new MouseEvent('click',{bubbles:true}))"),
+        () -> step(400, () -> System.out.println("[selftest] detalhe  " + bridge.probe()),
+        () -> step(300, () -> bridge.exec("window.inspector.setView('events')"),
+        () -> step(400, () -> {
+            System.out.println("[selftest] events   " + bridge.probe());
             stage.close();
-        })).play();
+        }, null)))));
+    }
+
+    /** Encadeia passos do smoke check sem aninhar Timeline na mao em cada ponto. */
+    private void step(int delayMs, Runnable action, Runnable next) {
+        Timeline t = new Timeline(new KeyFrame(Duration.millis(delayMs), e -> {
+            action.run();
+            if (next != null) next.run();
+        }));
+        t.play();
     }
 
     public static void main(String[] args) {

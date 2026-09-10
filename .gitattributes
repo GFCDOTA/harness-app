@@ -1,0 +1,7 @@
+# mvnw e script sh: CRLF quebra o shebang em CI Linux.
+mvnw text eol=lf
+# scripts do Windows precisam de CRLF.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+# bundle gerado pelo Vite: versionado de proposito (app offline), mas nao e fonte.
+src/main/resources/web/** linguist-generated=true

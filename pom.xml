@@ -5,9 +5,9 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>br.dev.felipe.inspector</groupId>
-  <artifactId>inspector-desktop</artifactId>
+  <artifactId>harness-app</artifactId>
   <version>0.1.0-SNAPSHOT</version>
-  <name>AI Pipeline Inspector — desktop</name>
+  <name>Harness App — AI Pipeline Inspector</name>
   <description>
     Host desktop do AI Pipeline Inspector (ADR-001). Java = domínio + I/O;
     React = visualização. Cliente do trace do sketchup-mcp; NÃO é um segundo backend.
@@ -24,6 +24,8 @@
     <selftest>false</selftest>
     <!-- trace alternativo; vazio = o .jsonl mais recente de ../.ai_bridge/traces -->
     <trace/>
+    <!-- diretorio de traces; vazio = traces-local ao lado do app -->
+    <traceDir/>
   </properties>
 
   <dependencies>
@@ -59,6 +61,33 @@
         <version>3.5.2</version>
       </plugin>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>dist</id>
+            <phase>package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <!-- target/dist recebe TODOS os jars; o jpackage poe o diretorio inteiro
+                   no classpath, e por isso o Launcher (que nao estende Application) e
+                   obrigatorio. -->
+              <outputDirectory>${project.build.directory}/dist</outputDirectory>
+              <includeScope>runtime</includeScope>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <outputDirectory>${project.build.directory}/dist</outputDirectory>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
         <version>0.0.8</version>
@@ -68,6 +97,7 @@
             <option>--enable-native-access=javafx.graphics,javafx.web</option>
             <option>-Dselftest=${selftest}</option>
             <option>-Dtrace=${trace}</option>
+            <option>-DtraceDir=${traceDir}</option>
           </options>
         </configuration>
       </plugin>

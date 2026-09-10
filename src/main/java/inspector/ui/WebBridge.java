@@ -44,6 +44,11 @@ public final class WebBridge {
         return Boolean.TRUE.equals(r);
     }
 
+    /** Executa JS avulso. Existe para o smoke check dirigir a UI; nao e caminho de dados. */
+    public void exec(String js) {
+        engine.executeScript(js);
+    }
+
     public String probe() {
         return String.valueOf(engine.executeScript("JSON.stringify(" + API + ".probe())"));
     }
