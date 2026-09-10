@@ -1,17 +1,41 @@
 package inspector.domain;
 
 /**
- * Ligação entre dois passos. {@code fallback} marca o desvio: o pipeline nao seguiu
- * pelo caminho pretendido. É derivado de {@code meta.fallbackTriggered}, nao de
- * conhecimento embutido sobre qual componente costuma falhar.
+ * Ligação entre dois passos, com o TIPO explícito.
+ *
+ * <p>O tipo importa para não ensinar arquitetura errada. Uma seta de
+ * {@code reference_db.retrieve} para o Ollama significa <b>houve chamada de verdade
+ * nesta execução</b>; uma seta para {@code tools/reference_db.py::retrieve} significa
+ * <b>essa é a implementação daquele componente</b> — coisas diferentes que, desenhadas
+ * igual, viram a mesma mentira.
+ *
+ * <p>{@link #SEQUENCE} e {@link #CALL} saem do trace ({@code seq} e
+ * {@code parentSpanId}). {@link #IMPLEMENTS} sai do catálogo verificado no código.
  */
-public record PipelineEdge(String id, String from, String to, boolean fallback) {
+public record PipelineEdge(String id, String from, String to, String kind) {
+
+    /** O passo seguinte na linha do tempo. */
+    public static final String SEQUENCE = "sequence";
+    /** Chamada real, provada por {@code parentSpanId}. */
+    public static final String CALL = "call";
+    /** O pipeline desviou porque algo falhou. */
+    public static final String FALLBACK = "fallback";
+    /** Não é execução: é o código que implementa, ou a lib que ele usa. */
+    public static final String IMPLEMENTS = "implements";
 
     public static PipelineEdge sequence(String from, String to) {
-        return new PipelineEdge(from + "->" + to, from, to, false);
+        return new PipelineEdge(from + "->" + to, from, to, SEQUENCE);
     }
 
     public static PipelineEdge fallback(String from, String to) {
-        return new PipelineEdge(from + "->" + to + ":fallback", from, to, true);
+        return new PipelineEdge(from + "->" + to + ":fallback", from, to, FALLBACK);
+    }
+
+    public static PipelineEdge call(String from, String to) {
+        return new PipelineEdge(from + "->" + to + ":call", from, to, CALL);
+    }
+
+    public boolean isFallback() {
+        return FALLBACK.equals(kind);
     }
 }

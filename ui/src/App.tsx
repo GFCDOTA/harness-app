@@ -23,6 +23,8 @@ export function App() {
   const [view, setView] = useState<View>("pipeline");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastLaunch, setLastLaunch] = useState<LaunchResult | null>(null);
+  // Um passo expandido por vez: mais controlavel e nao vira arvore de Natal.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(readTheme);
 
   // A API e o flag `ready` sao instalados APOS a montagem. createRoot().render() e
@@ -34,6 +36,7 @@ export function App() {
       latest.run = payload;
       setRun(payload);
       setSelectedId(null);
+      setExpandedId(null);
       return payload.pipeline.nodes.length;
     };
     window.inspector.appendEvent = (json: string) => {
@@ -129,7 +132,14 @@ export function App() {
       <main className="body">
         <div className="canvas">
           {view === "pipeline" ? (
-            <PipelineView run={run} selectedId={selectedId} onSelect={setSelectedId} theme={theme} />
+            <PipelineView
+              run={run}
+              selectedId={selectedId}
+              expandedId={expandedId}
+              onSelect={setSelectedId}
+              onToggleExpand={(id) => setExpandedId((atual) => (atual === id ? null : id))}
+              theme={theme}
+            />
           ) : view === "events" ? (
             <EventsView boxes={run.boxes} />
           ) : (

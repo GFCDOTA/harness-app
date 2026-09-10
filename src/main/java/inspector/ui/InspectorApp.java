@@ -311,33 +311,61 @@ public final class InspectorApp extends Application {
      * podem quebrar de forma silenciosa: o grafo, o clique->painel, e a Events View.
      */
     private void selfTest(WebBridge bridge, Stage stage) {
-        step(900, () -> {
-            System.out.println("[selftest] pipeline " + bridge.probe());
-            snapshot(stage, "01-pipeline");
-        },
-        () -> step(500, () -> bridge.exec("document.querySelectorAll('.react-flow__node-step')[3]"
-                        + ".dispatchEvent(new MouseEvent('click',{bubbles:true}))"),
-        () -> step(500, () -> bridge.exec(
-                "document.querySelectorAll('.dt-evhead').forEach(function(b){b.click();})"),
-        () -> step(500, () -> {
-            System.out.println("[selftest] detalhe  " + bridge.probe());
-            snapshot(stage, "02-detalhe");
-        },
-        () -> step(400, () -> bridge.exec("document.querySelectorAll('.dt-tab')[1].click()"),
-        () -> step(500, () -> {
-            System.out.println("[selftest] implem  " + bridge.probe());
-            snapshot(stage, "02b-implementacao");
-        },
-        () -> step(400, () -> bridge.exec("window.inspector.setView('oracle')"),
-        () -> step(600, () -> {
-            System.out.println("[selftest] oraculo  " + bridge.probe());
-            snapshot(stage, "03-oraculo");
-        },
-        () -> step(400, () -> bridge.exec("window.inspector.setView('events')"),
-        () -> step(400, () -> {
-            System.out.println("[selftest] events   " + bridge.probe());
-            launchStepOrClose(bridge, stage);
-        }, null))))))))));
+        List<Passo> roteiro = List.of(
+                new Passo(900, () -> {
+                    System.out.println("[selftest] pipeline " + bridge.probe());
+                    snapshot(stage, "01-pipeline");
+                }),
+                new Passo(400, () -> bridge.exec("document.querySelectorAll('.sn-explore')[0].click()")),
+                new Passo(700, () -> {
+                    System.out.println("[selftest] expansao " + bridge.probe());
+                    snapshot(stage, "01b-expansao");
+                }),
+                new Passo(300, () -> bridge.exec("document.querySelectorAll('.sn-explore')[0].click()")),
+                new Passo(500, () -> bridge.exec("document.querySelectorAll('.react-flow__node-step')[3]"
+                        + ".dispatchEvent(new MouseEvent('click',{bubbles:true}))")),
+                new Passo(500, () -> bridge.exec(
+                        "document.querySelectorAll('.dt-evhead').forEach(function(b){b.click();})")),
+                new Passo(500, () -> {
+                    System.out.println("[selftest] detalhe  " + bridge.probe());
+                    snapshot(stage, "02-detalhe");
+                }),
+                new Passo(400, () -> bridge.exec("document.querySelectorAll('.dt-tab')[1].click()")),
+                new Passo(500, () -> {
+                    System.out.println("[selftest] implem  " + bridge.probe());
+                    snapshot(stage, "02b-implementacao");
+                }),
+                new Passo(400, () -> bridge.exec("window.inspector.setView('oracle')")),
+                new Passo(600, () -> {
+                    System.out.println("[selftest] oraculo  " + bridge.probe());
+                    snapshot(stage, "03-oraculo");
+                }),
+                new Passo(400, () -> bridge.exec("window.inspector.setView('events')")),
+                new Passo(400, () -> {
+                    System.out.println("[selftest] events   " + bridge.probe());
+                    launchStepOrClose(bridge, stage);
+                }));
+        executar(roteiro, 0);
+    }
+
+    /** Um passo do roteiro: espera, faz. */
+    private record Passo(int delayMs, Runnable acao) {
+    }
+
+    /**
+     * Roda o roteiro em sequencia, por indice.
+     *
+     * <p>Antes isto era uma cadeia de lambdas aninhadas e cada passo novo virava um
+     * exercicio de contar parentese — que quebrou o build. Lista + indice nao tem
+     * esse problema.
+     */
+    private void executar(List<Passo> roteiro, int i) {
+        if (i >= roteiro.size()) return;
+        Passo p = roteiro.get(i);
+        new Timeline(new KeyFrame(Duration.millis(p.delayMs()), e -> {
+            p.acao().run();
+            executar(roteiro, i + 1);
+        })).play();
     }
 
     /**
@@ -355,11 +383,11 @@ public final class InspectorApp extends Application {
         System.out.println("[selftest] pedindo start de '" + svc + "' pela UI");
         bridge.exec("window.inspector.setView('oracle'); window.inspector.requestStart('"
                 + svc.replace("'", "") + "')");
-        step(60000, () -> {
+        executar(List.of(new Passo(60000, () -> {
             System.out.println("[selftest] launch   " + bridge.probe());
             snapshot(stage, "04-launch");
             stage.close();
-        }, null);
+        })), 0);
     }
 
     /**
@@ -401,15 +429,6 @@ public final class InspectorApp extends Application {
             }
         }
         return out;
-    }
-
-    /** Encadeia passos do smoke check sem aninhar Timeline na mao em cada ponto. */
-    private void step(int delayMs, Runnable action, Runnable next) {
-        Timeline t = new Timeline(new KeyFrame(Duration.millis(delayMs), e -> {
-            action.run();
-            if (next != null) next.run();
-        }));
-        t.play();
     }
 
     public static void main(String[] args) {

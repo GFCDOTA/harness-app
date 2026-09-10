@@ -2,6 +2,8 @@ package inspector.domain;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 
@@ -23,11 +25,12 @@ import java.util.Map;
  * <p>Os eventos {@code run.started} / {@code run.finished} nao sao passos: sao os
  * TERMINAIS da run, e a UI os desenha como inicio e fim.
  */
-public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges) {
+public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<PipelineEdge> calls) {
 
     public Pipeline {
         steps = List.copyOf(steps);
         edges = List.copyOf(edges);
+        calls = List.copyOf(calls);
     }
 
     /**
@@ -54,22 +57,84 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges) {
                     ? PipelineEdge.fallback(prev.id(), cur.id())
                     : PipelineEdge.sequence(prev.id(), cur.id()));
         }
-        return new Pipeline(steps, edges);
+        return new Pipeline(steps, edges, callEdges(steps));
     }
 
+    /**
+     * Agrupa em passos. O {@code spanId} manda quando existe.
+     *
+     * <p>Antes o agrupamento era so por corrida CONSECUTIVA de chave, e isso quebrava
+     * em dois lugares de uma vez: o evento que FECHA o span do orquestrador caia no
+     * passo seguinte (o do fallback), o que deixava o orquestrador eternamente
+     * {@code running} e ainda fazia o fallback parecer o pai das chamadas ao Ollama e
+     * ao Qdrant. Span e a unidade real de trabalho — respeitar isso conserta os dois.
+     *
+     * <p>Evento SEM span (gates, correction loop, marcadores) continua na regra de
+     * corrida consecutiva: {@code harnessKind}, senao categoria + familia.
+     */
     private static List<List<TraceEvent>> group(List<TraceEvent> events) {
         List<List<TraceEvent>> groups = new ArrayList<>();
+        Map<String, List<TraceEvent>> bySpan = new LinkedHashMap<>();
         String currentKey = null;
+        List<TraceEvent> spanless = null;
+
         for (TraceEvent e : events) {
             if (isTerminalMarker(e)) continue;
+
+            String span = e.spanId();
+            if (span != null && !span.isBlank()) {
+                List<TraceEvent> grupo = bySpan.get(span);
+                if (grupo == null) {
+                    grupo = new ArrayList<>();
+                    bySpan.put(span, grupo);
+                    groups.add(grupo);
+                }
+                grupo.add(e);
+                // um span interrompe a corrida dos sem-span
+                currentKey = null;
+                spanless = null;
+                continue;
+            }
+
             String key = stepKey(e);
-            if (!key.equals(currentKey)) {
-                groups.add(new ArrayList<>());
+            if (spanless == null || !key.equals(currentKey)) {
+                spanless = new ArrayList<>();
+                groups.add(spanless);
                 currentKey = key;
             }
-            groups.getLast().add(e);
+            spanless.add(e);
         }
         return groups;
+    }
+
+    /**
+     * Quem CHAMOU quem, derivado de {@code parentSpanId} — fato do trace, nao
+     * suposicao. Passo A chama B quando algum evento de B aponta para um span de A.
+     */
+    private static List<PipelineEdge> callEdges(List<PipelineStep> steps) {
+        Map<String, String> spanToStep = new LinkedHashMap<>();
+        for (PipelineStep st : steps) {
+            for (TraceEvent e : st.events()) {
+                if (e.spanId() != null && !e.spanId().isBlank()) {
+                    spanToStep.putIfAbsent(e.spanId(), st.id());
+                }
+            }
+        }
+        List<PipelineEdge> calls = new ArrayList<>();
+        Set<String> vistos = new LinkedHashSet<>();
+        for (PipelineStep st : steps) {
+            for (TraceEvent e : st.events()) {
+                String pai = e.parentSpanId();
+                if (pai == null || pai.isBlank()) continue;
+                String de = spanToStep.get(pai);
+                if (de == null || de.equals(st.id())) continue;
+                String chave = de + ">" + st.id();
+                if (vistos.add(chave)) {
+                    calls.add(PipelineEdge.call(de, st.id()));
+                }
+            }
+        }
+        return calls;
     }
 
     static boolean isTerminalMarker(TraceEvent e) {

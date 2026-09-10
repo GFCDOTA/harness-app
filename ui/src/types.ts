@@ -75,6 +75,8 @@ export type PipelineEdgeDto = {
   id: string;
   source: string;
   target: string;
+  /** sequence | call | fallback | implements — o tipo evita ensinar arquitetura errada. */
+  kind: string;
   fallback: boolean;
 };
 
@@ -99,7 +101,7 @@ export type RunPayload = {
   durationMs: number | null;
   terminalStatus: string | null;
   boxes: Box[];
-  pipeline: { nodes: Step[]; edges: PipelineEdgeDto[] };
+  pipeline: { nodes: Step[]; edges: PipelineEdgeDto[]; calls: PipelineEdgeDto[] };
 };
 
 export type ServiceHealth = {

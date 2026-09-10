@@ -348,3 +348,45 @@ body {
 .sn-decision { margin-top: 4px; }
 .dt-libs { display: flex; flex-wrap: wrap; gap: 4px; }
 .dt-lib { font-size: 10.5px; font-family: ui-monospace, Consolas, monospace; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line-strong); color: var(--dim); }
+
+/* ---------- expansao semantica ---------- */
+.sn-explore {
+  display: block; width: 100%; margin-top: 7px; font: inherit; font-size: 10.5px;
+  padding: 3px 0; cursor: pointer; border: 1px solid var(--line-strong);
+  border-radius: 5px; background: var(--card-2); color: var(--dim);
+}
+.sn-explore:hover { border-color: var(--accent); color: var(--ink); }
+
+.step-node[data-papel="apagado"] { opacity: .38; }
+.step-node[data-papel="expandido"] { box-shadow: 0 0 0 2px var(--accent); }
+.step-node[data-papel="chamado"] { box-shadow: 0 0 0 2px var(--ok); }
+.step-node[data-papel="chamado"] .sn-explore { border-color: var(--ok); color: var(--ok); }
+
+/* Satelite NAO e etapa de execucao: borda tracejada e peso menor, de proposito.
+   Se tivesse a mesma cara de um passo, o grafo diria que o arquivo .py foi
+   "chamado", que e justamente a confusao a evitar. */
+.sat {
+  width: 200px; padding: 7px 9px; border: 1px dashed var(--line-strong);
+  border-radius: 8px; background: var(--card-2); color: var(--ink);
+}
+.sat-h { font-size: 11px; font-weight: 500; color: var(--dim); margin-bottom: 3px; }
+.sat-i { margin-right: 5px; }
+.sat-l {
+  font-size: 10.5px; color: var(--ink); font-family: ui-monospace, Consolas, monospace;
+  word-break: break-word; line-height: 1.45;
+}
+.sat-input .sat-l, .sat-output .sat-l { font-family: inherit; color: var(--dim); }
+.sat-impl { border-color: var(--obs); }
+.sat-deps { border-color: var(--rag); }
+.sat-decision { border-color: var(--degraded); }
+.sat-decision .sat-h { color: var(--degraded); }
+
+.react-flow__edge.callEdge .react-flow__edge-text { fill: var(--ok); font-weight: 500; }
+.sat-i {
+  display: inline-block; min-width: 26px; text-align: center; font-size: 9px;
+  letter-spacing: .04em; text-transform: uppercase; padding: 0 4px; border-radius: 3px;
+  border: 1px solid var(--line-strong); color: var(--faint); margin-right: 6px;
+}
+.sat-impl .sat-i { color: var(--obs); border-color: var(--obs); }
+.sat-deps .sat-i { color: var(--rag); border-color: var(--rag); }
+.sat-decision .sat-i { color: var(--degraded); border-color: var(--degraded); }

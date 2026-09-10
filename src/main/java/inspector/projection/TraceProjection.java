@@ -143,13 +143,26 @@ public final class TraceProjection {
             ed.put("id", e.id());
             ed.put("source", e.from());
             ed.put("target", e.to());
-            ed.put("fallback", e.fallback());
+            ed.put("kind", e.kind());
+            ed.put("fallback", e.isFallback());
             edges.add(ed);
+        }
+
+        List<Map<String, Object>> calls = new ArrayList<>(p.calls().size());
+        for (PipelineEdge e : p.calls()) {
+            Map<String, Object> ed = new LinkedHashMap<>();
+            ed.put("id", e.id());
+            ed.put("source", e.from());
+            ed.put("target", e.to());
+            ed.put("kind", e.kind());
+            calls.add(ed);
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("nodes", nodes);
         out.put("edges", edges);
+        // quem chamou quem, derivado de parentSpanId — para a expansao semantica
+        out.put("calls", calls);
         return out;
     }
 

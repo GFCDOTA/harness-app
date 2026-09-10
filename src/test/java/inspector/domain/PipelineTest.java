@@ -15,11 +15,21 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class PipelineTest {
 
-    /** Constroi eventos inline: a regra de agrupamento fica explicita no proprio teste. */
+    /**
+     * Evento SEM span. E o caso que exercita a regra de corrida consecutiva; span
+     * proprio por evento faria cada um virar um passo e nao testaria nada disso.
+     */
     private static TraceEvent ev(long seq, String comp, String cat, String status,
                                  String name, Map<String, Object> meta) {
-        return new TraceEvent(seq, "r1", "sp" + seq, null, "2026-01-01T00:00:00.000Z",
+        return new TraceEvent(seq, "r1", null, null, "2026-01-01T00:00:00.000Z",
                 null, comp, cat, status, name, meta);
+    }
+
+    /** Evento COM span e pai — para a regra que manda quando ha span. */
+    private static TraceEvent span(long seq, String spanId, String parent, String comp,
+                                   String cat, String status, String name) {
+        return new TraceEvent(seq, "r1", spanId, parent, "2026-01-01T00:00:00.000Z",
+                null, comp, cat, status, name, Map.of());
     }
 
     private static Run load(Path f) {
@@ -100,7 +110,7 @@ class PipelineTest {
         PipelineStep fb = p.steps().stream().filter(PipelineStep::fallbackEntry).findFirst().orElseThrow();
         List<PipelineEdge> entrando = p.edges().stream().filter(e -> e.to().equals(fb.id())).toList();
         assertEquals(1, entrando.size());
-        assertTrue(entrando.getFirst().fallback(),
+        assertTrue(entrando.getFirst().isFallback(),
                 "o desvio precisa ser visivel como desvio, nao como passo normal");
     }
 
@@ -139,7 +149,7 @@ class PipelineTest {
         }
         assertEquals(8, p.steps().size(), "o alvo pedagogico e 7-8 caixas");
         assertEquals(7, p.edges().size());
-        assertEquals(1, p.edges().stream().filter(PipelineEdge::fallback).count());
+        assertEquals(1, p.edges().stream().filter(PipelineEdge::isFallback).count());
     }
 
     @Test
@@ -164,5 +174,57 @@ class PipelineTest {
         Run run = Run.fromEvents(List.of(
                 ev(1, "comp.x", "RAG", null, "rag.something", Map.of())));
         assertNull(Pipeline.from(run).steps().getFirst().status());
+    }
+
+    @Test
+    void oSpanManda_eventoDoMesmoSpanVoltaParaOmesmoPassoAindaQueNaoSejaContiguo() {
+        Run run = Run.fromEvents(List.of(
+                span(1, "s1", null, "reference_db.retrieve", "RAG", "started", "rag.query.started"),
+                span(2, "s2", "s1", "ollama.x", "RAG", "ok", "rag.embedding.finished"),
+                span(3, "s1", null, "reference_db.retrieve", "RAG", "degraded", "rag.query.finished")));
+        Pipeline p = Pipeline.from(run);
+        assertEquals(2, p.steps().size(), "seq 1 e 3 sao o MESMO span: um passo so");
+        assertEquals(2, p.steps().getFirst().eventCount(),
+                "o span s1 tem abertura e fechamento; o do meio pertence ao filho");
+        assertEquals("degraded", p.steps().getFirst().status(),
+                "o evento de fechamento voltou para o passo certo, entao ele nao fica running");
+    }
+
+    @Test
+    void quemChamouQuemSaiDeParentSpanId_naoDeSuposicao() {
+        Run run = Run.fromEvents(List.of(
+                span(1, "s1", null, "reference_db.retrieve", "RAG", "started", "rag.query.started"),
+                span(2, "s2", "s1", "ollama.x", "RAG", "ok", "rag.embedding.finished"),
+                span(3, "s3", "s1", "qdrant.y", "RAG", "failed", "rag.retrieval.finished"),
+                span(4, "s1", null, "reference_db.retrieve", "RAG", "degraded", "rag.query.finished")));
+        Pipeline p = Pipeline.from(run);
+        String orquestrador = p.steps().getFirst().id();
+        List<String> chamados = p.calls().stream()
+                .filter(e -> e.from().equals(orquestrador)).map(PipelineEdge::to).toList();
+        assertEquals(2, chamados.size(), "o retrieve chamou ollama e qdrant: " + p.calls());
+        assertTrue(p.calls().stream().allMatch(e -> PipelineEdge.CALL.equals(e.kind())));
+    }
+
+    @Test
+    void oPassoDoFallbackNaoVira_paiDasChamadasDoOrquestrador() {
+        Run run = Run.fromEvents(List.of(
+                span(1, "s1", null, "reference_db.retrieve", "RAG", "started", "rag.query.started"),
+                span(2, "s2", "s1", "ollama.x", "RAG", "ok", "rag.embedding.finished"),
+                span(3, "s4", "s1", "reference_db.faceted", "RAG", "ok", "rag.retrieval.finished"),
+                span(4, "s1", null, "reference_db.retrieve", "RAG", "degraded", "rag.query.finished")));
+        Pipeline p = Pipeline.from(run);
+        String fallback = p.steps().stream()
+                .filter(st -> "reference_db.faceted".equals(st.dominantComponent()))
+                .findFirst().orElseThrow().id();
+        assertTrue(p.calls().stream().noneMatch(e -> e.from().equals(fallback)),
+                "o fallback nao chamou ninguem; era artefato do agrupamento antigo");
+    }
+
+    @Test
+    void semSpanAlgumNaoHaArestaDeChamada() {
+        Run run = Run.fromEvents(List.of(
+                ev(1, "a.x", "RAG", "ok", "n1", Map.of()),
+                ev(2, "b.y", "LLM", "ok", "n2", Map.of())));
+        assertTrue(Pipeline.from(run).calls().isEmpty(), "sem parentSpanId nao se inventa chamada");
     }
 }
