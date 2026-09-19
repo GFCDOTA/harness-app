@@ -10,3 +10,4 @@ state-local/
 capabilities/__pycache__/
 capabilities/**/__pycache__/
 capabilities/.pytest_cache/
+ui/.vite/
