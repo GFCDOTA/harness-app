@@ -84,6 +84,10 @@ UNSUPPORTED: dict[str, str] = {
 }
 
 
+class NotImplementedCapability(RuntimeError):
+    """A capability existe no vocabulário do sistema, mas ainda não foi feita."""
+
+
 class Registry:
     """Monta e executa a tabela de capabilities."""
 
@@ -117,6 +121,8 @@ class Registry:
                         schema=spec.input_schema)
         try:
             data = spec.handler(**args)
+        except NotImplementedCapability as exc:
+            return _err("NOT_IMPLEMENTED", str(exc), capability=name)
         except AmbiguousObject as exc:
             return _err("AMBIGUOUS", str(exc), candidates=exc.candidates)
         except SceneError as exc:
@@ -135,7 +141,9 @@ class Registry:
 
     def _register_all(self) -> None:
         obj = {"type": "string", "description": "id do objeto (ex. suite_01.escrivaninha) ou termo ('a escrivaninha')"}
-        room = {"type": "string", "description": "id do cômodo (ex. r003). Omitido = todos"}
+        room = {"type": "string",
+                "description": ("id do cômodo, vindo de list_rooms ou de um resultado anterior. "
+                                "NÃO invente: omita e busque na planta inteira.")}
 
         self._add(ToolSpec(
             "get_system_status",
@@ -178,7 +186,10 @@ class Registry:
             timeout_sec=30))
 
         self._add(ToolSpec(
-            "list_objects", "Lista os objetos (móveis) da cena, opcionalmente de um cômodo.",
+            "list_objects",
+            "Lista os objetos (móveis) da cena. Para ACHAR um móvel pelo nome use "
+            "find_object, que varre a planta inteira — esta tool é para inventariar. "
+            "Só passe room_id se o usuário nomeou o cômodo.",
             {"type": "object", "properties": {"room_id": room}}, self._list_objects))
 
         self._add(ToolSpec(
@@ -188,8 +199,11 @@ class Registry:
 
         self._add(ToolSpec(
             "find_object",
-            "Procura objetos por termo em linguagem natural ('a mesa', 'escrivaninha'). "
-            "Use SEMPRE isto antes de mover: nunca invente um id.",
+            "Procura objetos por termo em linguagem natural ('a mesa', 'a cama', "
+            "'escrivaninha') na planta INTEIRA. Use SEMPRE isto para localizar um "
+            "móvel — antes de mover e também para responder 'onde está X'. Devolve "
+            "TODOS os que casam: no plural ('as camas') espere mais de um. "
+            "Nunca invente um id.",
             {"type": "object", "properties": {
                 "query": {"type": "string", "description": "o termo como o usuário falou"},
                 "room_id": room}, "required": ["query"]},
@@ -273,6 +287,31 @@ class Registry:
         self._add(ToolSpec(
             "list_locked_objects", "Objetos que não podem ser movidos.",
             {"type": "object", "properties": {}}, self._list_locked))
+
+        self._register_unsupported()
+
+    def _register_unsupported(self) -> None:
+        """Publica as capabilities que AINDA NÃO existem como tools que recusam.
+
+        Por que registrar em vez de esconder: o modelo escolhe tool por nome e
+        descrição, e ignora proibição escrita em prosa. Testado com o
+        qwen2.5-coder — mandar no prompt "não tente contornar" fez ele chamar
+        `find_object` procurando um lençol preto e responder "não encontrei esse
+        objeto", quando a verdade é que material não está implementado.
+
+        Registrada, a tool casa com a intenção, o handler devolve o MOTIVO, e o
+        modelo repassa. Mesmo princípio do resto do sistema: erro é dado.
+
+        Nenhuma delas toca em nada — `mutates=False` e o handler só levanta.
+        """
+        for name, reason in sorted(UNSUPPORTED.items()):
+            self._add(ToolSpec(
+                name,
+                f"NÃO IMPLEMENTADO — {reason}. Chamar esta tool devolve o motivo; "
+                "use-a quando o pedido for sobre isso, em vez de tentar outra.",
+                {"type": "object", "properties": {}},
+                _refuser(name, reason),
+                risk=LOW, mutates=False, timeout_sec=5))
 
     # -- handlers -----------------------------------------------------------
     def _status(self) -> dict:
@@ -450,6 +489,16 @@ class Registry:
 
 
 # -- utilidades --------------------------------------------------------------
+def _refuser(name: str, reason: str):
+    """Handler que existe só para recusar com o motivo real."""
+
+    def handler(**_ignored):
+        raise NotImplementedCapability(
+            f"'{name}' ainda não existe neste sistema: {reason}")
+
+    return handler
+
+
 def _err(code: str, message: str, **extra) -> dict:
     return {"ok": False, "error": {"code": code, "message": message, **extra}}
 

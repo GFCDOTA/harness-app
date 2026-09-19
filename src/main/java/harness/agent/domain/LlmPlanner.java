@@ -20,6 +20,20 @@ public interface LlmPlanner {
      */
     PlannerDecision plan(AgentContext context, List<ToolSpec> tools, List<Step> history);
 
+    /**
+     * Diz ao planner o que o sistema AINDA NÃO faz.
+     *
+     * <p>Sem isto o modelo só enxerga as tools que existem e força qualquer pedido
+     * dentro delas. Caso real: <i>"coloque um lençol preto"</i> virou
+     * {@code find_object("o lencol preto")} e a resposta foi "não encontrei esse
+     * objeto" — quando a verdade é que material não está implementado. O modelo
+     * não estava errando: ele não tinha como saber.
+     *
+     * <p>Implementação vazia por padrão: um planner de teste não precisa disto.
+     */
+    default void knowsUnsupported(List<UnsupportedCapability> unsupported) {
+    }
+
     /** {@code true} quando o modelo está no ar. */
     boolean isAvailable();
 

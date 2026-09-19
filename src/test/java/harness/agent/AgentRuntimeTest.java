@@ -80,7 +80,7 @@ class AgentRuntimeTest {
                 PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 300))),
                 PlannerDecision.finalAnswer("pronto"));
 
-        runtime(host, planner, new AgentState("p"), 3).execute("move", new AgentTrace("r", TraceRecorder.NOOP));
+        runtime(host, planner, new AgentState("p"), 3).execute("move 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertTrue(host.toolNamesCalled().contains("run_gates"),
                 "validar não pode ser escolha do modelo");
@@ -98,7 +98,7 @@ class AgentRuntimeTest {
                 PlannerDecision.finalAnswer("movi a escrivaninha, ficou ótimo"));
 
         AgentOutcome out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.GATE_FAILED, out.status(),
                 "o modelo dizer que ficou bom não vale nada contra o gate");
@@ -192,7 +192,7 @@ class AgentRuntimeTest {
         var planner = new ScriptedPlanner("qwen-teste");
 
         AgentOutcome out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move a mesa", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move a mesa 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.UNAVAILABLE, out.status());
         assertTrue(out.summary().contains("capability host"));
@@ -205,7 +205,7 @@ class AgentRuntimeTest {
         planner.unavailable();
 
         AgentOutcome out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move a mesa", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move a mesa 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.UNAVAILABLE, out.status());
         assertTrue(out.summary().contains("Ollama"));
@@ -219,7 +219,7 @@ class AgentRuntimeTest {
                 PlannerDecision.unavailable("o modelo devolveu JSON quebrado"));
 
         AgentOutcome out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.UNAVAILABLE, out.status());
         assertTrue(host.calls.isEmpty());
@@ -248,7 +248,7 @@ class AgentRuntimeTest {
         var registry = new ToolRegistry(host.describeTools(), host.unsupported());
 
         AgentOutcome out = new AgentRuntime(host, planner, registry, new AgentState("p"), 3, false)
-                .execute("move", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.UNAVAILABLE, out.status());
         assertTrue(out.summary().contains("conexão caiu"));
@@ -265,7 +265,7 @@ class AgentRuntimeTest {
                 PlannerDecision.needsHuman("Qual mesa? 1) sala 2) cozinha"));
 
         AgentOutcome out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move a mesa", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move a mesa 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
         assertTrue(out.summary().contains("Qual mesa"));
@@ -281,7 +281,7 @@ class AgentRuntimeTest {
                 PlannerDecision.finalAnswer("movido"));
 
         AgentOutcome out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(AgentOutcome.Status.UNAVAILABLE, out.status());
     }
@@ -294,7 +294,7 @@ class AgentRuntimeTest {
         var planner = new ScriptedPlanner("qwen-teste",
                 PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 300))),
                 PlannerDecision.finalAnswer("movida"));
-        runtime(host, planner, state, 3).execute("move a escrivaninha", new AgentTrace("r1", TraceRecorder.NOOP));
+        runtime(host, planner, state, 3).execute("move a escrivaninha 30 cm para a esquerda", new AgentTrace("r1", TraceRecorder.NOOP));
 
         assertEquals("suite_01.escrivaninha", state.lastReferencedObject().orElseThrow());
         assertEquals("r000", state.activeRoom().orElseThrow());
@@ -318,7 +318,7 @@ class AgentRuntimeTest {
         runtime(host, new ScriptedPlanner("q",
                 PlannerDecision.callTools(List.of(move("x", "left", 10))),
                 PlannerDecision.finalAnswer("ok")), state, 3)
-                .execute("move", new AgentTrace("r1", TraceRecorder.NOOP));
+                .execute("move 30 cm para a esquerda", new AgentTrace("r1", TraceRecorder.NOOP));
         assertEquals(1, state.pendingEdits());
 
         runtime(host, new ScriptedPlanner("q",
@@ -340,7 +340,7 @@ class AgentRuntimeTest {
         runtime(host, new ScriptedPlanner("q",
                 PlannerDecision.callTools(List.of(move("suite_01.cama", "left", 300))),
                 PlannerDecision.finalAnswer("não deu")), state, 3)
-                .execute("move a cama", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move a cama 30 cm", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals(0, state.pendingEdits());
         assertTrue(state.lastReferencedObject().isEmpty());
@@ -368,7 +368,7 @@ class AgentRuntimeTest {
                 PlannerDecision.finalAnswer("pronto"));
 
         runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("run_abc", recorder));
+                .execute("move 30 cm para a esquerda", new AgentTrace("run_abc", recorder));
 
         assertTrue(recorder.names().contains("run.started"));
         assertTrue(recorder.names().contains("agent.plan"));
@@ -387,7 +387,7 @@ class AgentRuntimeTest {
                 PlannerDecision.finalAnswer("ok"));
 
         runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("run_x", recorder));
+                .execute("move 30 cm para a esquerda", new AgentTrace("run_x", recorder));
 
         var plan = recorder.events.stream().filter(e -> e.name().equals("agent.plan")).findFirst().orElseThrow();
         var tool = recorder.events.stream().filter(e -> e.name().equals("tool.invoke")).findFirst().orElseThrow();
@@ -406,7 +406,7 @@ class AgentRuntimeTest {
                 PlannerDecision.finalAnswer("ficou lindo"));
 
         runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("run_y", recorder));
+                .execute("move 30 cm para a esquerda", new AgentTrace("run_y", recorder));
 
         var finished = recorder.events.stream()
                 .filter(e -> e.name().equals("run.finished")).findFirst().orElseThrow();
@@ -440,8 +440,117 @@ class AgentRuntimeTest {
                 PlannerDecision.finalAnswer("Movida 30 cm; circulação continua livre."));
 
         final var out = runtime(host, planner, new AgentState("p"), 3)
-                .execute("move", new AgentTrace("r", TraceRecorder.NOOP));
+                .execute("move 30 cm para a esquerda", new AgentTrace("r", TraceRecorder.NOOP));
 
         assertEquals("Movida 30 cm; circulação continua livre.", out.summary());
+    }
+
+    // -- pedido vago nao vira alteracao ------------------------------------
+    @Test
+    void medidaQueOusuarioNAOdisseNaoViraAlteracao() {
+        // Caso real (2026-09-19): "altere a cama dos quartos" virou
+        // move_object(forward, 100mm). O comando nao dizia direcao nem distancia;
+        // o modelo preencheu as duas lacunas e o projeto mudou. Os gates ate
+        // aprovaram — mover 10 cm nao quebra nada — e e' por isso que gate verde
+        // nao conserta alteracao inventada.
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_02.cama", "forward", 100))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("altere a cama dos quartos", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("move_object"),
+                "nada pode ter sido movido");
+        assertTrue(out.summary().contains("não vou inventar"));
+        assertEquals(1, out.options().size(), "a proposta volta para o Felipe confirmar");
+    }
+
+    @Test
+    void medidaEmDIGITOnoComandoLibera() {
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 300))),
+                PlannerDecision.finalAnswer("movida"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("move a escrivaninha 30 cm para a esquerda",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("move_object"));
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+    }
+
+    @Test
+    void medidaPorEXTENSOnoComandoTambemLibera() {
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 100))),
+                PlannerDecision.finalAnswer("ok"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("empurra a mesa dez centimetros para a esquerda",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("move_object"));
+    }
+
+    @Test
+    void aGuardaNAOatrapalhaToolQueNaoDependeDeMedida() {
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(new ToolCall("undo", Map.of()))),
+                PlannerDecision.finalAnswer("desfeito"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("desfaz", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("undo"));
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+    }
+
+    @Test
+    void oPlannerRECEBEaListaDoQueNaoExiste() {
+        // Caso real: "coloque um lencol preto" virou find_object("o lencol preto")
+        // e a resposta foi "nao encontrei esse objeto" — quando a verdade e' que
+        // material nao esta implementado. O modelo nao estava errando: ele nao
+        // tinha como saber.
+        final var host = FakeCapabilityHost.standard();
+        final var registry = new ToolRegistry(host.describeTools(), host.unsupported());
+        final var planner = new RecordingPlanner();
+
+        new AgentRuntime(host, planner, registry, new AgentState("p"), 2, false);
+
+        assertEquals(List.of("render"),
+                planner.informed.stream().map(u -> u.name()).toList());
+    }
+
+    /** Planner que só anota o que lhe contaram. */
+    private static final class RecordingPlanner implements harness.agent.domain.LlmPlanner {
+        final List<harness.agent.domain.UnsupportedCapability> informed = new ArrayList<>();
+
+        @Override
+        public void knowsUnsupported(
+                final List<harness.agent.domain.UnsupportedCapability> unsupported) {
+            this.informed.addAll(unsupported);
+        }
+
+        @Override
+        public PlannerDecision plan(final AgentContext c,
+                                    final List<harness.agent.domain.ToolSpec> t,
+                                    final List<Step> h) {
+            return PlannerDecision.finalAnswer("ok");
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public String modelName() {
+            return "gravador";
+        }
     }
 }

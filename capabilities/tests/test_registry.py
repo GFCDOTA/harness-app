@@ -67,10 +67,33 @@ def test_tool_desconhecida_nao_vira_comando(reg):
     assert "move_object" in out["error"]["available"]
 
 
-def test_capability_ainda_nao_suportada_explica_o_porque(reg):
+def test_capability_ainda_nao_suportada_RECUSA_com_o_motivo(reg):
+    """Ela e' REGISTRADA e recusa — nao escondida.
+
+    O modelo escolhe tool por nome e ignora proibicao em prosa: mandar no prompt
+    "nao tente contornar" fez o qwen chamar find_object atras de um lencol preto e
+    responder "nao encontrei esse objeto", quando a verdade e' que material nao
+    esta implementado. Registrada, a tool casa com a intencao e devolve o MOTIVO.
+    """
     out = reg.invoke("render", {})
-    assert out["error"]["code"] == "UNKNOWN_TOOL"
+    assert out["ok"] is False
+    assert out["error"]["code"] == "NOT_IMPLEMENTED"
     assert "slice 5" in out["error"]["message"]
+    assert out["error"]["capability"] == "render"
+
+
+def test_a_tool_que_recusa_aparece_na_tabela_para_o_modelo_poder_escolher(reg):
+    tools = {t["name"]: t for t in reg.describe()["tools"]}
+    assert "set_material" in tools
+    assert tools["set_material"]["description"].startswith("NÃO IMPLEMENTADO")
+    assert tools["set_material"]["mutates"] is False
+
+
+def test_recusar_nao_altera_nada(reg):
+    antes = reg.invoke("list_history", {})["data"]["count"]
+    reg.invoke("create_object", {})
+    reg.invoke("delete_object", {})
+    assert reg.invoke("list_history", {})["data"]["count"] == antes
 
 
 def test_argumento_obrigatorio_faltando_e_erro_tipado(reg):

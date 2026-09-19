@@ -8,6 +8,7 @@ import harness.agent.domain.LlmPlanner;
 import harness.agent.domain.PlannerDecision;
 import harness.agent.domain.ToolCall;
 import harness.agent.domain.ToolSpec;
+import harness.agent.domain.UnsupportedCapability;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -42,6 +43,9 @@ public final class OllamaPlanner implements LlmPlanner {
     private final HttpClient http;
     private final Duration timeout;
 
+    /** O que o sistema ainda NAO faz. Vai para o prompt; ver knowsUnsupported. */
+    private List<UnsupportedCapability> unsupported = List.of();
+
     public OllamaPlanner(final String baseUrl, final String model, final Duration timeout) {
         final var base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.chatUri = URI.create(base + "/api/chat");
@@ -54,6 +58,11 @@ public final class OllamaPlanner implements LlmPlanner {
     @Override
     public String modelName() {
         return this.model;
+    }
+
+    @Override
+    public void knowsUnsupported(final List<UnsupportedCapability> unsupported) {
+        this.unsupported = unsupported == null ? List.of() : List.copyOf(unsupported);
     }
 
     @Override
@@ -196,7 +205,8 @@ public final class OllamaPlanner implements LlmPlanner {
 
     private ArrayNode messages(final AgentContext context, final List<Step> history) {
         final var messages = MAPPER.createArrayNode();
-        messages.add(MAPPER.createObjectNode().put("role", "system").put("content", systemPrompt()));
+        messages.add(MAPPER.createObjectNode().put("role", "system")
+                .put("content", systemPrompt()));
         messages.add(MAPPER.createObjectNode().put("role", "user")
                 .put("content", statePrompt(context) + "\n\nCOMANDO: " + context.command()));
 
@@ -233,8 +243,13 @@ public final class OllamaPlanner implements LlmPlanner {
                 return MAPPER.writeValueAsString(error);
             }
             final var data = new LinkedHashMap<String, Object>(step.result().data());
-            trim(data, "objects", 12);
-            trim(data, "matches", 8);
+            // COMPACTAR, não truncar. Cortar a lista nos 12 primeiros fez o modelo
+            // responder "não encontrei nenhuma cama nos quartos" — em ordem
+            // alfabética os 12 primeiros são todos da área de serviço, e as camas
+            // nunca chegavam a ele. Dado incompleto produz conclusão errada com
+            // toda a confiança; lista inteira em forma curta não.
+            compact(data, "objects");
+            compact(data, "matches");
             trim(data, "edits", 5);
             data.remove("baseline");
             final var json = MAPPER.writeValueAsString(Map.of("ok", true, "data", data));
@@ -242,6 +257,29 @@ public final class OllamaPlanner implements LlmPlanner {
         } catch (final Exception ex) {  // NOSONAR
             return "{\"ok\":false,\"error\":\"resultado não serializável\"}";
         }
+    }
+
+    /**
+     * Reduz cada objeto ao que o modelo precisa para escolher: id, cômodo e trava.
+     *
+     * <p>bbox, peças e kinds são geometria — quem usa isso são os gates, não o
+     * planner. Tirando-os, os 64 objetos da planta cabem no contexto inteiros.
+     */
+    private static void compact(final Map<String, Object> data, final String key) {
+        if (!(data.get(key) instanceof List<?> list)) return;
+        final var compacted = new ArrayList<Object>(list.size());
+        for (final var entry : list) {
+            if (entry instanceof Map<?, ?> row) {
+                final var slim = new LinkedHashMap<String, Object>();
+                for (final var field : List.of("id", "room", "roomId", "locked")) {
+                    if (row.get(field) != null) slim.put(field, row.get(field));
+                }
+                compacted.add(slim.isEmpty() ? row : slim);
+            } else {
+                compacted.add(entry);
+            }
+        }
+        data.put(key, compacted);
     }
 
     private static void trim(final Map<String, Object> data, final String key, final int max) {
@@ -252,7 +290,7 @@ public final class OllamaPlanner implements LlmPlanner {
     }
 
     private String systemPrompt() {
-        return """
+        final var prompt = new StringBuilder("""
                 Você é o planejador do Harness, que opera a planta de um apartamento no SketchUp.
 
                 COMO VOCÊ TRABALHA
@@ -270,8 +308,35 @@ public final class OllamaPlanner implements LlmPlanner {
                 - Quando o objetivo estiver cumprido, responda em TEXTO (sem tool) com um resumo \
                 de uma ou duas linhas, em português, do que foi feito.
 
-                Uma tool por vez. Português nas respostas.
-                """;
+                PEDIDO VAGO NÃO VIRA ALTERAÇÃO
+                - Se o comando não diz O QUE mudar, NÃO escolha por ele. "altere a cama", \
+                "melhora isso", "ajeita o quarto" não são instruções: são conversas. Responda em \
+                TEXTO perguntando o que ele quer mudar, e ofereça opções concretas.
+                - NUNCA invente uma distância, uma direção ou um ângulo que o usuário não disse. \
+                Mover 10 cm "para ver" é alterar o projeto dele sem permissão. O Harness recusa \
+                essas chamadas de qualquer forma; perguntar é mais rápido.
+                - Comando no plural ("a cama dos quartos") afeta MAIS DE UM objeto. Liste o que \
+                encontrou e pergunte, em vez de escolher um.
+                - NUNCA invente um room_id. Para achar um móvel pelo NOME use find_object, que \
+                varre a planta inteira. Só passe room_id se o usuário nomeou o cômodo ou se o id \
+                veio de list_rooms. Filtrar por um cômodo que você chutou faz você concluir que \
+                algo "não existe" quando ele está no cômodo ao lado.
+
+                O QUE VOCÊ NÃO CONSEGUE FAZER
+                Se o pedido for uma destas, responda em TEXTO dizendo QUAL capability falta e \
+                o motivo que está na lista abaixo — não só "não faço isso". E NÃO tente \
+                contornar com outra tool: usar find_object para procurar algo que não existe \
+                é uma resposta errada.
+                """);
+
+        if (!this.unsupported.isEmpty()) {
+            for (final var missing : this.unsupported) {
+                prompt.append("- ").append(missing.name()).append(": ")
+                        .append(missing.reason()).append('\n');
+            }
+        }
+        prompt.append("\nUma tool por vez. Português nas respostas.\n");
+        return prompt.toString();
     }
 
     private String statePrompt(final AgentContext context) {

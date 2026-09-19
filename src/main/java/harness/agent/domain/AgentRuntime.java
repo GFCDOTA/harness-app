@@ -46,6 +46,9 @@ public final class AgentRuntime {
         this.state = state;
         this.maxAttempts = Math.max(1, maxAttempts);
         this.autoApproveHigh = autoApproveHigh;
+        // O planner precisa saber o que NÃO existe para poder dizer "isso eu ainda
+        // não faço" em vez de forçar o pedido dentro das tools que tem.
+        this.planner.knowsUnsupported(registry.unsupported());
     }
 
     public AgentState state() {
@@ -120,6 +123,16 @@ public final class AgentRuntime {
                                     List.of(Map.of("tool", call.tool(), "args", call.args())),
                                     command);
                         }
+                        final var invented = fabricatedMeasurement(command, call);
+                        if (invented != null) {
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "UNGROUNDED_ARGUMENT", invented);
+                            return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                    invented, actions, gateResults,
+                                    List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                            "reason", "medida não veio do comando")),
+                                    command);
+                        }
                         if (!admission.allowed()) {
                             // Recusa é DADO para o modelo: ele precisa ver o erro
                             // para escolher outra tool, não ser interrompido.
@@ -183,6 +196,53 @@ public final class AgentRuntime {
 
     private static boolean touchesGeometry(final String tool) {
         return GEOMETRY_TOOLS.contains(tool);
+    }
+
+    /** Tools cujo efeito depende de uma MEDIDA que só o usuário pode ter dado. */
+    private static final List<String> MEASURED_TOOLS = List.of("move_object");
+
+    /** Números por extenso que contam como medida dita — a lista é curta de propósito. */
+    private static final List<String> SPELLED_NUMBERS = List.of(
+            "um ", "uma ", "dois", "duas", "tres", "três", "quatro", "cinco", "seis",
+            "sete", "oito", "nove", "dez", "quinze", "vinte", "trinta", "quarenta",
+            "cinquenta", "sessenta", "setenta", "oitenta", "noventa", "cem", "meio",
+            "metade");
+
+    /**
+     * Recusa uma medida que o usuário NÃO deu.
+     *
+     * <p>Caso real que motivou isto: <i>"altere a cama dos quartos"</i> virou
+     * {@code move_object(direction=forward, distance_mm=100)}. O comando não dizia
+     * direção nem distância; o modelo preencheu as duas lacunas com um palpite, os
+     * gates aprovaram (mover 10 cm não quebra nada) e o projeto mudou sem ninguém
+     * ter pedido aquilo. Gate verde não conserta alteração inventada — o gate
+     * responde "é válido?", não "foi isto que pediram?".
+     *
+     * <p>Guarda DETERMINÍSTICA, não instrução de prompt: prompt é pedido, não
+     * garantia. Se a medida não aparece no comando, a chamada não executa — ela
+     * volta como proposta para o Felipe confirmar.
+     *
+     * <p>Limite conhecido: reconhece dígito e um punhado de números por extenso em
+     * português. "desloca um tantinho" cai aqui, e deve mesmo — é vago.
+     *
+     * @return a explicação quando a medida foi inventada, ou {@code null} quando veio do comando
+     */
+    private static String fabricatedMeasurement(final String command, final ToolCall call) {
+        if (!MEASURED_TOOLS.contains(call.tool())) return null;
+        final var said = command == null ? "" : command.toLowerCase();
+        final var hasDigit = said.chars().anyMatch(Character::isDigit);
+        final var hasWord = SPELLED_NUMBERS.stream().anyMatch(said::contains);
+        if (hasDigit || hasWord) return null;
+        return "Você não disse quanto mover, e eu não vou inventar a medida. "
+                + "O modelo propôs " + describeProposal(call) + ". "
+                + "Diga a distância (ex.: \"10 cm para a esquerda\") ou confirme essa proposta.";
+    }
+
+    private static String describeProposal(final ToolCall call) {
+        final var object = String.valueOf(call.args().getOrDefault("object_id", "?"));
+        final var direction = String.valueOf(call.args().getOrDefault("direction", "?"));
+        final var distance = String.valueOf(call.args().getOrDefault("distance_mm", "?"));
+        return "mover " + object + " " + distance + " mm para " + direction;
     }
 
     /**
