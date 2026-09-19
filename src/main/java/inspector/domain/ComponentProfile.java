@@ -29,8 +29,7 @@ public record ComponentProfile(
         String output,
         String why,
         String code,
-        List<String> concepts
-) {
+        List<String> concepts) {
     /** Chip do card: rótulo curto e honesto sobre ONDE aquilo roda. */
     public static final String CODIGO_LOCAL = "codigo local";
     public static final String HTTP_LOCAL = "http local";

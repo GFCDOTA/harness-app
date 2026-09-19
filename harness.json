@@ -1,0 +1,26 @@
+{
+  "_comment": "Configuracao CENTRAL do Harness. Lida pelos DOIS lados: harness.config.HarnessConfig (Java) e harness_caps/config.py (Python). Precedencia: -Dchave > HARNESS_CHAVE no ambiente > este arquivo > convencao. Caminho de maquina, porta e modelo vivem aqui e em lugar nenhum mais.",
+
+  "project": "planta_74",
+  "pipelineRepo": "E:/Claude/apps/sketchup-mcp",
+  "stateDir": "E:/Claude/apps/harness-app/state-local",
+  "capabilitiesDir": "E:/Claude/apps/harness-app/capabilities",
+  "traceDir": "E:/Claude/apps/harness-app/traces-local",
+
+  "_comment_scale": "PT_TO_M da planta_74 e' ancorado em cota e CONGELADO. Mudar isto faz a mobilia flutuar fora do shell.",
+  "ptToM": "0.0259",
+  "sketchupExe": "C:/Program Files/SketchUp/SketchUp 2026/SketchUp/SketchUp.exe",
+
+  "_comment_agent": "O modelo e' trocavel sem tocar em codigo. Precisa suportar tool calling nativo no Ollama.",
+  "agentModel": "qwen2.5-coder:14b",
+  "ollamaUrl": "http://127.0.0.1:11434",
+  "agentTimeoutSec": 180,
+  "maxAgentAttempts": 4,
+
+  "_comment_risco": "false = capability de risco HIGH NUNCA roda sem confirmacao humana. Nao mudar sem motivo escrito.",
+  "autoApproveHighRisk": false,
+
+  "qdrantUrl": "http://127.0.0.1:6333",
+  "gptUrl": "http://127.0.0.1:8899",
+  "gptComposeDir": "E:/Claude/ops/gpt-docker"
+}

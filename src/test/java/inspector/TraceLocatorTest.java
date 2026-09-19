@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TraceLocatorTest {
 
-    private static Path trace(Path dir, String nome, long mtime) throws Exception {
+    private static Path trace(final Path dir, final String nome, final long mtime) throws Exception {
         Path p = dir.resolve(nome);
         Files.writeString(p, "{\"runId\":\"r1\",\"seq\":1,\"name\":\"run.started\"}\n",
                 StandardCharsets.UTF_8);
@@ -22,7 +22,7 @@ class TraceLocatorTest {
     }
 
     @Test
-    void arquivoExplicitoGanhaDeTodoOResto(@TempDir Path dir) throws Exception {
+    void arquivoExplicitoGanhaDeTodoOResto(final @TempDir Path dir) throws Exception {
         Path escolhido = trace(dir, "escolhido.jsonl", 1000L);
         Path maisNovo = trace(dir, "mais_novo.jsonl", 9000L);
         Path r = TraceLocator.resolve(escolhido.toString(), dir.toString(), dir.toString(), dir);
@@ -31,7 +31,7 @@ class TraceLocatorTest {
     }
 
     @Test
-    void diretorioExplicitoGanhaDaVariavelDeAmbiente(@TempDir Path a, @TempDir Path b) throws Exception {
+    void diretorioExplicitoGanhaDaVariavelDeAmbiente(final @TempDir Path a, final @TempDir Path b) throws Exception {
         trace(a, "do_dir.jsonl", 1000L);
         trace(b, "do_env.jsonl", 9000L);
         Path r = TraceLocator.resolve(null, a.toString(), b.toString(), null);
@@ -39,7 +39,7 @@ class TraceLocatorTest {
     }
 
     @Test
-    void variavelDeAmbienteGanhaDoDiretorioConvencional(@TempDir Path env, @TempDir Path conv) throws Exception {
+    void variavelDeAmbienteGanhaDoDiretorioConvencional(final @TempDir Path env, final @TempDir Path conv) throws Exception {
         trace(env, "do_env.jsonl", 1000L);
         trace(conv, "convencional.jsonl", 9000L);
         Path r = TraceLocator.resolve(null, null, env.toString(), conv);
@@ -47,7 +47,7 @@ class TraceLocatorTest {
     }
 
     @Test
-    void usaOConvencionalSoQuandoNadaMaisFoiInformado(@TempDir Path conv) throws Exception {
+    void usaOConvencionalSoQuandoNadaMaisFoiInformado(final @TempDir Path conv) throws Exception {
         trace(conv, "velho.jsonl", 1000L);
         trace(conv, "novo.jsonl", 9000L);
         assertEquals("novo.jsonl",
@@ -58,21 +58,21 @@ class TraceLocatorTest {
     void semNenhumaFonteFalhaEnsinandoAsTresOpcoes() {
         IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> TraceLocator.resolve(null, null, null, null));
-        String m = ex.getMessage();
+        final var m = ex.getMessage();
         assertTrue(m.contains("-Dtrace="), m);
         assertTrue(m.contains("-DtraceDir="), m);
         assertTrue(m.contains("INSPECTOR_TRACE_DIR"), m);
     }
 
     @Test
-    void convencionalInexistenteNaoContaComoFonte(@TempDir Path dir) {
+    void convencionalInexistenteNaoContaComoFonte(final @TempDir Path dir) {
         Path naoExiste = dir.resolve("nao_existe");
         assertThrows(IllegalStateException.class,
                 () -> TraceLocator.resolve(null, null, null, naoExiste));
     }
 
     @Test
-    void arquivoExplicitoInexistenteFalhaEmVezDeCairNoFallback(@TempDir Path conv) throws Exception {
+    void arquivoExplicitoInexistenteFalhaEmVezDeCairNoFallback(final @TempDir Path conv) throws Exception {
         trace(conv, "existe.jsonl", 1000L);
         IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> TraceLocator.resolve(conv.resolve("fantasma.jsonl").toString(),
@@ -81,7 +81,7 @@ class TraceLocatorTest {
     }
 
     @Test
-    void stringEmBrancoNaoContaComoFonteInformada(@TempDir Path conv) throws Exception {
+    void stringEmBrancoNaoContaComoFonteInformada(final @TempDir Path conv) throws Exception {
         trace(conv, "unico.jsonl", 1000L);
         assertEquals("unico.jsonl",
                 TraceLocator.resolve("  ", "", "  ", conv).getFileName().toString());

@@ -16,8 +16,7 @@ public record ExecutionFacts(
         Implementation impl,
         String decision,
         String pattern,
-        boolean llmInvolved
-) {
+        boolean llmInvolved) {
     public static final String IA = "IA";
     public static final String RAG = "RAG";
     public static final String ALGORITMO = "ALGORITMO";

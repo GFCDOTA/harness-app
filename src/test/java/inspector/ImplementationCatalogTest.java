@@ -34,7 +34,7 @@ class ImplementationCatalogTest {
             "finding_router", "correction_fixes", "inspector.demo");
 
     private static Path repoDoPipeline() {
-        String prop = System.getProperty("pipelineRepo");
+        final var prop = System.getProperty("pipelineRepo");
         if (prop != null && !prop.isBlank()) return Paths.get(prop);
         return Paths.get("..", "sketchup-mcp");
     }
@@ -47,7 +47,7 @@ class ImplementationCatalogTest {
         SourceVerifier verificador = new SourceVerifier(repo);
         List<String> problemas = new ArrayList<>();
 
-        for (String c : COMPONENTES) {
+        for (final String c : COMPONENTES) {
             ExecutionFacts f = ImplementationCatalog.factsFor(c);
             assertFalse(f.impl().isEmpty(), c + " nao tem implementacao declarada");
             SourceVerification v = verificador.verify(f.impl());
@@ -64,8 +64,8 @@ class ImplementationCatalogTest {
 
     @Test
     void oPipelineNaoUsaQdrantClientNemShapely() {
-        for (String c : COMPONENTES) {
-            for (String lib : ImplementationCatalog.factsFor(c).impl().libraries()) {
+        for (final String c : COMPONENTES) {
+            for (final String lib : ImplementationCatalog.factsFor(c).impl().libraries()) {
                 assertNotEquals("qdrant_client", lib, c + ": este repo fala com Qdrant por urllib puro");
                 assertNotEquals("shapely", lib, c + ": nenhum modulo do pipeline importa shapely");
             }
@@ -74,8 +74,8 @@ class ImplementationCatalogTest {
 
     @Test
     void nenhumaImplementacaoDeclaraClasse_porqueOpipelineEhFuncional() {
-        for (String c : COMPONENTES) {
-            String simbolo = ImplementationCatalog.factsFor(c).impl().symbol();
+        for (final String c : COMPONENTES) {
+            final var simbolo = ImplementationCatalog.factsFor(c).impl().symbol();
             assertFalse(simbolo.contains("."),
                     c + ": simbolo com ponto sugere Classe.metodo, e este pipeline e funcional");
         }

@@ -43,9 +43,9 @@ class TraceProjectionTest {
 
     @Test
     void oRotuloDizONDE_aCoisaRodaEnaoOhVagoExterno() throws Exception {
-        for (JsonNode b : project().get("boxes")) {
-            String comp = b.get("component").asText();
-            String rotulo = b.get("kindLabel").asText();
+        for (final JsonNode b : project().get("boxes")) {
+            final var comp = b.get("component").asText();
+            final var rotulo = b.get("kindLabel").asText();
             assertNotEquals("HTTP externo", rotulo,
                     "esse rotulo induzia a pensar em API na internet");
             if (comp.startsWith("ollama.deepseek")) {
@@ -62,7 +62,7 @@ class TraceProjectionTest {
 
     @Test
     void nenhumaChamadaDestaExecucaoSaiDaMaquina() throws Exception {
-        for (JsonNode b : project().get("boxes")) {
+        for (final JsonNode b : project().get("boxes")) {
             assertNotEquals("HTTP internet", b.get("kindLabel").asText(),
                     "Ollama e Qdrant rodam nesta maquina: " + b.get("component").asText());
         }
@@ -70,7 +70,7 @@ class TraceProjectionTest {
 
     @Test
     void oNoTrazONomeHumanoEondeRoda() throws Exception {
-        for (JsonNode n : project().get("pipeline").get("nodes")) {
+        for (final JsonNode n : project().get("pipeline").get("nodes")) {
             JsonNode perfil = n.get("profile");
             assertNotNull(perfil, "todo no precisa de perfil");
             assertFalse(perfil.get("humanName").asText().isBlank());
@@ -88,7 +88,7 @@ class TraceProjectionTest {
     @Test
     void duracaoAusenteViaJsonNuloEnaoZero() throws Exception {
         JsonNode degradado = null;
-        for (JsonNode b : project().get("boxes")) {
+        for (final JsonNode b : project().get("boxes")) {
             if (b.get("name").asText().equals("rag.degraded")) degradado = b;
         }
         assertNotNull(degradado);
@@ -98,9 +98,9 @@ class TraceProjectionTest {
 
     @Test
     void detalheTrazAsChavesDeMetaQueExplicamADegradacao() throws Exception {
-        for (JsonNode b : project().get("boxes")) {
+        for (final JsonNode b : project().get("boxes")) {
             if (b.get("name").asText().equals("rag.degraded")) {
-                String d = b.get("detail").asText();
+                final var d = b.get("detail").asText();
                 assertTrue(d.contains("backendRequested=embed"), d);
                 assertTrue(d.contains("backendActual=faceted"), d);
                 assertTrue(d.contains("fallbackReason=InfraUnavailable"), d);
@@ -114,7 +114,7 @@ class TraceProjectionTest {
 
     @Test
     void oPayloadNaoVazaObjetoJavaSoJson() throws Exception {
-        String json = new TraceProjection().toJson(fixtureRun(), "origem");
+        final var json = new TraceProjection().toJson(fixtureRun(), "origem");
         assertFalse(json.contains("inspector.domain"), "nome de classe Java vazou pro payload");
         assertFalse(json.contains("@"), "referencia de objeto Java vazou pro payload");
     }

@@ -29,36 +29,37 @@ public final class HttpHealthProbe implements HealthProbe {
             .build();
 
     @Override
-    public ServiceHealth probe(ServiceTarget target) {
-        long t0 = System.nanoTime();
-        String now = Instant.now().toString();
+    public ServiceHealth probe(final ServiceTarget target) {
+        final var startedAt = System.nanoTime();
+        final var now = Instant.now().toString();
         try {
-            HttpRequest req = HttpRequest.newBuilder(target.probeUri())
+            final var request = HttpRequest.newBuilder(target.probeUri())
                     .timeout(TIMEOUT)
                     .GET()
                     .build();
-            HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-            long ms = (System.nanoTime() - t0) / 1_000_000;
-            boolean up = res.statusCode() >= 200 && res.statusCode() < 400;
+            final var response = this.client.send(request, HttpResponse.BodyHandlers.ofString());
+            final var elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+            final var up = response.statusCode() >= 200 && response.statusCode() < 400;
             return new ServiceHealth(target.id(), target.label(), target.role(), up,
-                    res.statusCode(), ms, peek(res.body()), now);
-        } catch (Exception e) {
-            long ms = (System.nanoTime() - t0) / 1_000_000;
+                    response.statusCode(), elapsedMs, peek(response.body()), now);
+        } catch (final Exception ex) {
+            final var elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
             // Causa raiz e mais util que a classe da excecao: "Connection refused"
             // diz que o container esta parado; timeout diz outra coisa.
-            Throwable root = e;
+            var root = (Throwable) ex;
             while (root.getCause() != null) {
                 root = root.getCause();
             }
-            String why = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+            final var why = root.getMessage() == null
+                    ? root.getClass().getSimpleName() : root.getMessage();
             return new ServiceHealth(target.id(), target.label(), target.role(), false,
-                    null, ms, why, now);
+                    null, elapsedMs, why, now);
         }
     }
 
-    private static String peek(String body) {
+    private static String peek(final String body) {
         if (body == null) return "";
-        String flat = body.replaceAll("\\s+", " ").trim();
+        final var flat = body.replaceAll("\\s+", " ").trim();
         return flat.length() <= BODY_PEEK ? flat : flat.substring(0, BODY_PEEK - 1) + "…";
     }
 }

@@ -20,14 +20,13 @@ public record SourceVerification(
         boolean symbolFound,
         List<String> librariesFound,
         List<String> librariesMissing,
-        String note
-) {
+        String note) {
     public SourceVerification {
         librariesFound = librariesFound == null ? List.of() : List.copyOf(librariesFound);
         librariesMissing = librariesMissing == null ? List.of() : List.copyOf(librariesMissing);
     }
 
-    public static SourceVerification notChecked(String why) {
+    public static SourceVerification notChecked(final String why) {
         return new SourceVerification(false, false, false, List.of(), List.of(), why);
     }
 

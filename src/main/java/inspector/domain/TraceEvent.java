@@ -26,8 +26,7 @@ public record TraceEvent(
         String category,
         String status,
         String name,
-        Map<String, Object> meta
-) {
+        Map<String, Object> meta) {
     public TraceEvent {
         if (runId == null || runId.isBlank()) {
             throw new IllegalArgumentException("runId é obrigatório no envelope");

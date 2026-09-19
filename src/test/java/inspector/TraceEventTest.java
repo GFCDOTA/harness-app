@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TraceEventTest {
 
-    private static TraceEvent valid(Map<String, Object> meta) {
+    private static TraceEvent valid(final Map<String, Object> meta) {
         return new TraceEvent(1L, "run_X", "s01", null, "2026-01-02T03:00:00.000Z",
                 null, "c", "RAG", "ok", "rag.query.started", meta);
     }

@@ -1,4 +1,4 @@
-import type { LaunchResult, OraclePayload, RunPayload, View } from "./types";
+import type { AgentPayload, LaunchResult, OraclePayload, RunPayload, View } from "./types";
 
 /**
  * A fronteira Java -> JS, do lado do JS. O Java chama estes metodos via
@@ -12,10 +12,14 @@ export type InspectorApi = {
   appendEvent: (json: string) => number;
   setOracle: (json: string) => number;
   setLaunchResult: (json: string) => string;
+  setAgent: (json: string) => number;
   setView: (view: View) => View;
   probe: () => unknown;
   /** A UI ENFILEIRA um pedido; o Java PUXA. Ver WebBridge.drainRequests. */
   requestStart: (serviceId: string) => number;
+  /** Comando em linguagem natural para o Agent Runtime. Mesma fila, outro kind. */
+  sendCommand: (text: string) => number;
+  requestServices: (action: string) => number;
   __drain: () => string;
 };
 
@@ -31,7 +35,8 @@ export const latest: {
   oracle: OraclePayload | null;
   view: View;
   lastLaunch: LaunchResult | null;
-} = { run: null, oracle: null, view: "pipeline", lastLaunch: null };
+  agent: AgentPayload | null;
+} = { run: null, oracle: null, view: "pipeline", lastLaunch: null, agent: null };
 
 /**
  * Fila de pedidos da UI para o Java. Fica FORA do React de proposito: o Java puxa
@@ -52,9 +57,15 @@ export function installBase() {
     appendEvent: notMounted,
     setOracle: notMounted,
     setLaunchResult: notMounted,
+    setAgent: notMounted,
     setView: notMounted,
     probe,
-    requestStart: (serviceId: string) => queue.push(serviceId),
+    requestStart: (serviceId: string) =>
+      queue.push(JSON.stringify({ kind: "service", id: serviceId })),
+    sendCommand: (text: string) =>
+      queue.push(JSON.stringify({ kind: "command", text })),
+    requestServices: (action: string) =>
+      queue.push(JSON.stringify({ kind: "services", action })),
     __drain: () => {
       const out = JSON.stringify(queue);
       queue.length = 0;
@@ -113,6 +124,12 @@ export function probe(): unknown {
     domEventRows: countAll(".ev"),
     detailOpenFor: document.querySelector(".detail")?.getAttribute("data-detail-for") ?? null,
     detailMetaRows: countAll(".dt-meta-row"),
+    agentTools: latest.agent?.tools.length ?? 0,
+    agentStatus: latest.agent?.last?.status ?? null,
+    agentPendingEdits: latest.agent?.pendingEdits ?? 0,
+    domAgentTurns: countAll(".ag-turn"),
+    domAgentActions: countAll(".ag-action"),
+    domCommandBar: countAll(".cmd-input"),
     oracleServices: oracle?.health.length ?? 0,
     oracleUp: oracle?.upCount ?? 0,
     oracleConsults: oracle?.consults.length ?? 0,

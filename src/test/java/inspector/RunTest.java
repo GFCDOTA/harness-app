@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RunTest {
 
-    private static TraceEvent ev(long seq, String name, String status, Double dur, String runId) {
+    private static TraceEvent ev(final long seq, final String name, final String status, final Double dur, final String runId) {
         return new TraceEvent(seq, runId, "s01", null, "2026-01-02T03:00:00.000Z",
                 dur, "comp", "RAG", status, name, Map.of());
     }

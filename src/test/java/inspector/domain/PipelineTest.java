@@ -19,20 +19,20 @@ class PipelineTest {
      * Evento SEM span. E o caso que exercita a regra de corrida consecutiva; span
      * proprio por evento faria cada um virar um passo e nao testaria nada disso.
      */
-    private static TraceEvent ev(long seq, String comp, String cat, String status,
-                                 String name, Map<String, Object> meta) {
+    private static TraceEvent ev(final long seq, final String comp, final String cat, final String status,
+                                 final String name, final Map<String, Object> meta) {
         return new TraceEvent(seq, "r1", null, null, "2026-01-01T00:00:00.000Z",
                 null, comp, cat, status, name, meta);
     }
 
     /** Evento COM span e pai — para a regra que manda quando ha span. */
-    private static TraceEvent span(long seq, String spanId, String parent, String comp,
-                                   String cat, String status, String name) {
+    private static TraceEvent span(final long seq, final String spanId, final String parent, final String comp,
+                                   final String cat, final String status, final String name) {
         return new TraceEvent(seq, "r1", spanId, parent, "2026-01-01T00:00:00.000Z",
                 null, comp, cat, status, name, Map.of());
     }
 
-    private static Run load(Path f) {
+    private static Run load(final Path f) {
         List<TraceEvent> evs = new ArrayList<>();
         new JsonlReplayTraceSource(f).stream(evs::add);
         return Run.fromEvents(evs);
@@ -45,8 +45,8 @@ class PipelineTest {
     @Test
     void terminaisDaRunNaoSaoPassos() {
         Pipeline p = Pipeline.from(fixture());
-        for (PipelineStep st : p.steps()) {
-            for (TraceEvent e : st.events()) {
+        for (final PipelineStep st : p.steps()) {
+            for (final TraceEvent e : st.events()) {
                 assertNotEquals("run.started", e.name());
                 assertNotEquals("run.finished", e.name());
             }
@@ -140,7 +140,7 @@ class PipelineTest {
         assumeTrue(Files.exists(real), "trace real ausente: teste pulado");
         Pipeline p = Pipeline.from(load(real));
         System.out.println("--- pipeline derivado do trace real ---");
-        for (PipelineStep st : p.steps()) {
+        for (final PipelineStep st : p.steps()) {
             ComponentProfile perfil = ComponentCatalog.profileFor(st.dominantComponent());
             System.out.printf("%-4s %-24s %-28s %-9s %10s %-14s fb=%-5s seq %d-%d (%d ev)%n",
                     st.id(), perfil.humanName(), st.dominantComponent(), st.status(),
@@ -198,7 +198,7 @@ class PipelineTest {
                 span(3, "s3", "s1", "qdrant.y", "RAG", "failed", "rag.retrieval.finished"),
                 span(4, "s1", null, "reference_db.retrieve", "RAG", "degraded", "rag.query.finished")));
         Pipeline p = Pipeline.from(run);
-        String orquestrador = p.steps().getFirst().id();
+        final var orquestrador = p.steps().getFirst().id();
         List<String> chamados = p.calls().stream()
                 .filter(e -> e.from().equals(orquestrador)).map(PipelineEdge::to).toList();
         assertEquals(2, chamados.size(), "o retrieve chamou ollama e qdrant: " + p.calls());
@@ -213,7 +213,7 @@ class PipelineTest {
                 span(3, "s4", "s1", "reference_db.faceted", "RAG", "ok", "rag.retrieval.finished"),
                 span(4, "s1", null, "reference_db.retrieve", "RAG", "degraded", "rag.query.finished")));
         Pipeline p = Pipeline.from(run);
-        String fallback = p.steps().stream()
+        final var fallback = p.steps().stream()
                 .filter(st -> "reference_db.faceted".equals(st.dominantComponent()))
                 .findFirst().orElseThrow().id();
         assertTrue(p.calls().stream().noneMatch(e -> e.from().equals(fallback)),

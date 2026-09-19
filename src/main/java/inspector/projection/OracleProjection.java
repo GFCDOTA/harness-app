@@ -18,46 +18,46 @@ public final class OracleProjection {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public String toJson(List<ServiceHealth> health, List<GptConsult> consults, String consultsDir) {
+    public String toJson(final List<ServiceHealth> health, final List<GptConsult> consults, final String consultsDir) {
         try {
-            return mapper.writeValueAsString(toMap(health, consults, consultsDir));
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("nao consegui serializar o painel do oraculo", e);
+            return this.mapper.writeValueAsString(toMap(health, consults, consultsDir));
+        } catch (final JsonProcessingException ex) {
+            throw new IllegalStateException("nao consegui serializar o painel do oraculo", ex);
         }
     }
 
-    Map<String, Object> toMap(List<ServiceHealth> health, List<GptConsult> consults, String consultsDir) {
-        List<Map<String, Object>> hs = new ArrayList<>(health.size());
-        for (ServiceHealth h : health) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", h.id());
-            m.put("label", h.label());
-            m.put("role", h.role());
-            m.put("up", h.up());
-            m.put("httpStatus", h.httpStatus());
-            m.put("latencyMs", h.latencyMs());
-            m.put("detail", h.detail());
-            m.put("checkedAt", h.checkedAt());
-            hs.add(m);
+    Map<String, Object> toMap(final List<ServiceHealth> health, final List<GptConsult> consults, final String consultsDir) {
+        final var services = new ArrayList<Map<String, Object>>(health.size());
+        for (final var service : health) {
+            final var row = new LinkedHashMap<String, Object>();
+            row.put("id", service.id());
+            row.put("label", service.label());
+            row.put("role", service.role());
+            row.put("up", service.up());
+            row.put("httpStatus", service.httpStatus());
+            row.put("latencyMs", service.latencyMs());
+            row.put("detail", service.detail());
+            row.put("checkedAt", service.checkedAt());
+            services.add(row);
         }
 
-        List<Map<String, Object>> cs = new ArrayList<>(consults.size());
-        for (GptConsult c : consults) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", c.id());
-            m.put("title", c.title());
-            m.put("when", c.when());
-            m.put("declaredWhen", c.declaredWhen());
-            m.put("sizeBytes", c.sizeBytes());
-            m.put("question", c.question());
-            m.put("answer", c.answer());
-            m.put("bothSides", c.hasBothSides());
-            cs.add(m);
+        final var rows = new ArrayList<Map<String, Object>>(consults.size());
+        for (final var consult : consults) {
+            final var row = new LinkedHashMap<String, Object>();
+            row.put("id", consult.id());
+            row.put("title", consult.title());
+            row.put("when", consult.when());
+            row.put("declaredWhen", consult.declaredWhen());
+            row.put("sizeBytes", consult.sizeBytes());
+            row.put("question", consult.question());
+            row.put("answer", consult.answer());
+            row.put("bothSides", consult.hasBothSides());
+            rows.add(row);
         }
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("health", hs);
-        out.put("consults", cs);
+        final var out = new LinkedHashMap<String, Object>();
+        out.put("health", services);
+        out.put("consults", rows);
         out.put("consultsDir", consultsDir);
         out.put("upCount", health.stream().filter(ServiceHealth::up).count());
         out.put("serviceCount", health.size());

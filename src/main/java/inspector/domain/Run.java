@@ -16,7 +16,7 @@ public record Run(String runId, List<TraceEvent> events) {
     }
 
     /** Ordena por seq e recusa misturar runs diferentes no mesmo agregado. */
-    public static Run fromEvents(List<TraceEvent> raw) {
+    public static Run fromEvents(final List<TraceEvent> raw) {
         if (raw.isEmpty()) {
             throw new IllegalArgumentException("uma Run precisa de pelo menos um evento");
         }
@@ -40,7 +40,7 @@ public record Run(String runId, List<TraceEvent> events) {
 
     /** Duração total: vem do evento terminal. Ausente = null, nunca 0.0. */
     public Double durationMs() {
-        for (TraceEvent e : events.reversed()) {
+        for (final TraceEvent e : events.reversed()) {
             if (e.isRunTerminal() && e.durationMs() != null) return e.durationMs();
         }
         return null;
@@ -48,7 +48,7 @@ public record Run(String runId, List<TraceEvent> events) {
 
     /** Status do evento terminal, ou {@code null} se a run não fechou. */
     public String terminalStatus() {
-        for (TraceEvent e : events.reversed()) {
+        for (final TraceEvent e : events.reversed()) {
             if (e.isRunTerminal()) return e.status();
         }
         return null;

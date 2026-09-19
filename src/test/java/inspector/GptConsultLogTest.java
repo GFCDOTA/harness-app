@@ -20,7 +20,7 @@ class GptConsultLogTest {
         return new GptConsultLog(Paths.get("src", "test", "resources", "consults")).readAll();
     }
 
-    private static GptConsult byId(String id) {
+    private static GptConsult byId(final String id) {
         return read().stream().filter(c -> c.id().equals(id)).findFirst().orElseThrow();
     }
 
@@ -64,14 +64,14 @@ class GptConsultLogTest {
 
     @Test
     void whenEhInstanteIsoDoArquivoParaOrdenarEformatar() {
-        for (GptConsult c : read()) {
+        for (final GptConsult c : read()) {
             assertDoesNotThrow(() -> java.time.Instant.parse(c.when()),
                     "when precisa ser ISO comparavel, veio: " + c.when());
         }
     }
 
     @Test
-    void ordenaPorDataDeEscritaEnaoPeloNomeDoArquivo(@TempDir Path dir) throws Exception {
+    void ordenaPorDataDeEscritaEnaoPeloNomeDoArquivo(final @TempDir Path dir) throws Exception {
         // Reproduz o bug real: nome que comeca com LETRA vencia nome que comeca com
         // DIGITO na ordem descendente, jogando um registro antigo para o topo.
         Path antigoComLetra = dir.resolve("SPIKE_20260909_antigo.md");
@@ -86,12 +86,12 @@ class GptConsultLogTest {
     }
 
     @Test
-    void diretorioInexistenteDevolveVazioEmVezDeExplodir(@TempDir Path dir) {
+    void diretorioInexistenteDevolveVazioEmVezDeExplodir(final @TempDir Path dir) {
         assertTrue(new GptConsultLog(dir.resolve("nao_existe")).readAll().isEmpty());
     }
 
     @Test
-    void arquivoSemSecaoConhecidaUsaOCorpoInteiroComoResposta(@TempDir Path dir) throws Exception {
+    void arquivoSemSecaoConhecidaUsaOCorpoInteiroComoResposta(final @TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("solto.md"), "# titulo\n\nso texto corrido", StandardCharsets.UTF_8);
         GptConsult c = new GptConsultLog(dir).readAll().getFirst();
         assertTrue(c.answer().contains("so texto corrido"));
