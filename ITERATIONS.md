@@ -85,3 +85,30 @@ justamente o mais recente: ordenar por data sem excluir erraria toda vez.
 **Lição de processo:** a primeira coisa que ele pediu ao produto não estava no
 registry. Vale olhar o que ele tenta e não consegue antes de escolher a próxima
 fatia pela lista do plano.
+
+### Delta — "ela tá mt burra ainda"
+
+Felipe operou o app e os três primeiros comandos expuseram falhas de desenho. A
+mais grave: **"altere a cama dos quartos" virou `move_object(forward, 100mm)`**.
+Ele não disse direção nem distância; o modelo preencheu as duas lacunas, os gates
+aprovaram (mover 10 cm não quebra nada) e o projeto mudou.
+
+Isso obrigou a nomear uma regra que estava implícita e errada: **gate verde não
+valida alteração inventada.** O gate responde "isto é válido?", não "foi isto que
+pediram?". São perguntas diferentes e eu tinha tratado como a mesma.
+
+Correções, todas determinísticas onde o erro muda o projeto:
+
+1. `AgentRuntime.fabricatedMeasurement` — medida que não aparece no comando não
+   vira alteração; volta como proposta para confirmação.
+2. As 12 capabilities inexistentes viraram **tools registradas que recusam** com
+   `NOT_IMPLEMENTED`. Tentei primeiro por prompt ("não tente contornar") e o
+   modelo recaiu na mesma sessão: ele escolhe tool por nome e ignora proibição em
+   prosa. Registrada, a tool casa com a intenção e devolve o motivo.
+3. Resultado de tool passou a ser **compactado, não truncado**. Cortar
+   `list_objects` nos 12 primeiros fez o modelo responder "não encontrei nenhuma
+   cama nos quartos" — em ordem alfabética os 12 primeiros são todos da área de
+   serviço. Dado incompleto produz conclusão errada com toda a confiança.
+
+**Lição de método:** prompt é pedido, não garantia. Serve para preferência de
+estilo; não serve para impedir o modelo de alterar o projeto.

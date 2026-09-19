@@ -71,25 +71,52 @@ Felipe → UI (React) → ControlPlane → AgentRuntime → LlmPlanner (Qwen/Oll
 2. **Sucesso ≠ "o Qwen respondeu".** Só é sucesso quando: intenção entendida +
    tool executada + estado mudou + validação rodou + resultado persistido +
    trace gravado. Alteração geométrica **sempre** dispara gate, automaticamente.
-3. **Nada ressuscita sozinho.** `startAll`/`restartFailed` existem como AÇÃO de
+3. **Gate verde NÃO valida alteração inventada.** O gate responde "isto é
+   válido?", não "foi isto que pediram?". Medida que o usuário não disse não vira
+   alteração: `AgentRuntime.fabricatedMeasurement` barra a chamada e devolve a
+   proposta para confirmação. Guarda determinística — prompt é pedido, não
+   garantia. Veio de `"altere a cama dos quartos"` virar um move de 10 cm que os
+   gates aprovaram.
+4. **Capability que não existe RECUSA com o motivo.** As 12 pendentes são TOOLS
+   registradas cujo handler levanta `NOT_IMPLEMENTED`. Não escondê-las é
+   deliberado: modelo escolhe tool por nome e ignora proibição em prosa — tentei
+   por prompt e ele recaiu na mesma sessão. Erro é dado, como no resto do sistema.
+5. **Nada ressuscita sozinho.** `startAll`/`restartFailed` existem como AÇÃO de
    gente, nunca como reflexo. Sem watchdog, sem retry em loop, sem reagir a
    "caiu" — é a lição do NOC (`E:\Claude\LESSONS-NOC.md`), e há teste travando.
-4. **Indisponível é resposta.** Gate que não rodou é `UNAVAILABLE`, não PASS.
-   Capability que não existe é publicada como `unsupported` **com o motivo**.
+6. **Indisponível é resposta.** Gate que não rodou é `UNAVAILABLE`, não PASS.
    Stub verde ensinando que funcionou é pior que dizer "ainda não".
-5. **Risco HIGH não roda sem confirmação humana.** `autoApproveHighRisk` em
+7. **Risco HIGH não roda sem confirmação humana.** `autoApproveHighRisk` em
    `harness.json` é `false` e não muda sem motivo escrito.
-6. **Degradação é parcial, nunca all-or-nothing.** Ollama fora → determinístico
+8. **Degradação é parcial, nunca all-or-nothing.** Ollama fora → determinístico
    segue. Qdrant fora → o que não usa RAG segue. Host fora → a tela diz o quê e
    por quê, com o erro real.
-7. **NÃO criar outra app.** Evoluir esta. Se houver limitação arquitetural que
+9. **NÃO criar outra app.** Evoluir esta. Se houver limitação arquitetural que
    torne isso impossível, documentar com evidência antes de mudar de direção.
+
+## O que o modelo local erra (e como o sistema responde)
+
+Aprendido rodando contra `qwen2.5-coder:14b`. Não são bugs do modelo — são
+propriedades dele, e o sistema tem que absorver cada uma.
+
+| Ele faz isto | O sistema responde |
+|---|---|
+| escreve a chamada de tool como TEXTO, sem usar `tool_calls` | `OllamaPlanner.toolCallsInText` reconhece a forma; o nome ainda passa pelo registry |
+| preenche medida que ninguém deu | guarda determinística barra e devolve proposta |
+| chuta `room_id` sem nunca ter listado cômodos | descrições mandam usar `find_object`, que varre a planta inteira |
+| conclui "não existe" a partir de lista cortada | resultado é COMPACTADO (id/room/locked), nunca truncado |
+| força o pedido nas tools que tem | capability inexistente é tool que recusa com motivo |
+| resume errado o que acabou de fazer | operação de um significado só (`undo`, `restore`) tem resumo escrito pelo Harness |
+
+**Regra que sai disso:** quando o modelo erra de um jeito que muda o projeto, a
+correção é determinística. Prompt só para o que é preferência de estilo.
 
 ## Source of truth (não duplicar)
 
 | Assunto | Arquivo |
 |---|---|
 | configuração (portas, modelo, caminhos, política) | `harness.json` — lido pelo Java **e** pelo Python |
+| onde fica a raiz do Harness para o app EMPACOTADO | `-DharnessHome` (ver `packaging/build-app.cmd`) |
 | schema das capabilities | `capabilities/harness_caps/registry.py` (o Java só lê) |
 | estado do projeto (cena, edições, travas) | `state-local/<projeto>.scene.json` |
 | envelope de trace | `inspector.domain.TraceEvent` |
@@ -114,8 +141,14 @@ Felipe → UI (React) → ControlPlane → AgentRuntime → LlmPlanner (Qwen/Oll
 
 ## Rodar
 
+O jeito do Felipe: **atalho `Harness App` na área de trabalho**. Ele aponta para
+a pasta `app\rN` mais recente e é repontado por `packaging/build-app.cmd`.
+
 ```bash
-# app
+# regenerar o app clicável (UI + testes + jpackage + atalho)
+cmd //c "packaging\build-app.cmd"
+
+# app, a partir do repo
 ./mvnw javafx:run
 
 # o mesmo control plane, sem janela (prova reproduzível / diagnóstico)
@@ -131,6 +164,14 @@ cd ui && npm run build
 
 ⚠️ `JAVA_HOME` **precisa** ser o JDK 25 (`maven.compiler.release=25`). Com o
 JDK 21 o surefire falha com "class file version 69.0".
+
+⚠️ **Capability nova só aparece reabrindo o app.** A tabela de tools é lida UMA
+vez, quando o capability host sobe.
+
+⚠️ `packaging/build-app.cmd` é **ASCII puro** e usa `cd` absoluto, não
+`pushd`/`popd` — o shim do npm desbalanceia a pilha de diretórios do cmd e o
+passo seguinte não achava o `mvnw.cmd`. Um travessão no arquivo também já quebrou
+o parser.
 
 ## Gotchas herdados (detalhe em `docs/field-notes-jpackage.md`)
 

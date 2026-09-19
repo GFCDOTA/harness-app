@@ -29,7 +29,9 @@ A decisão arquitetural canônica e as regras que não devem ser revertidas est�
   snapshots, undo/redo.
 - `gates.py` — circulation/overlap/geometry sobre a cena **editada**, findings
   roteados pelo `finding_router` real (FP-033).
-- `registry.py` — 22 capabilities tipadas + 12 declaradas `unsupported` com motivo.
+- `registry.py` — **34 tools**: 22 implementadas + 12 que RECUSAM com o motivo
+  (`NOT_IMPLEMENTED`). As que recusam são registradas de propósito — ver hard
+  rule 4 no `CLAUDE.md`.
 - `host.py` — NDJSON stdin/stdout, processo filho.
 
 **Control plane** (`src/main/java/harness/`)
@@ -58,8 +60,8 @@ gates com o motivo, e a tabela de capabilities (incluindo o que ainda não exist
 
 | Suíte | Resultado |
 |---|---|
-| Java (`./mvnw test`) | **165**, 1 falha **pré-existente** |
-| Python (`cd capabilities && python -m pytest`) | **75 passed** |
+| Java (`./mvnw test`) | **170**, 1 falha **pré-existente** |
+| Python (`cd capabilities && python -m pytest`) | **77 passed** |
 
 Baseline antes desta iniciativa: 103 Java, mesma 1 falha.
 
@@ -142,6 +144,24 @@ Trace gravado (11 eventos, com parentesco de span):
 do comando** — um portal PRIMARY que tem 1,00 m vazio vai a 0,00 m com a mobília
 da baseline. O move piorou (colisão escrivaninha × guarda-roupa, 24 %), mas o
 FAIL não nasceu dele. Isso é um achado sobre a planta, não sobre o agente.
+
+## Correções vindas do uso real (2026-09-19)
+
+O Felipe operou o app e as três primeiras coisas que ele pediu expuseram falhas
+de desenho. Estão corrigidas e travadas por teste:
+
+| O que ele digitou | O que acontecia | O que acontece agora |
+|---|---|---|
+| "altere a cama dos quartos" | virava `move_object(forward, 100mm)` — medida inventada, gates aprovaram, projeto mudou | guarda determinística barra; volta como proposta para confirmar |
+| "coloque um lençol preto" | `find_object("o lencol preto")` → "não encontrei esse objeto" | `NOT_IMPLEMENTED` dizendo que material não está implementado |
+| "altere a cama dos quartos" | achava 1 cama (lista truncada + `room_id` chutado) | `find_object` acha as DUAS e pergunta qual |
+| "abra a última planta" | não existia capability | `open_skp_in_sketchup` abre a mais recente |
+| qualquer comando sem gate | selo dizia **VALIDADO** | diz "feito"; "validado" só com gate |
+
+**A lição que fica:** o modelo não erra por burrice, erra por propriedade. Quando
+o erro dele muda o projeto, a correção tem que ser determinística — prompt é
+pedido, não garantia. Tentei corrigir o caso do lençol por prompt e ele recaiu na
+mesma sessão; só parou quando a capability inexistente virou tool que recusa.
 
 ## O que ainda NÃO funciona
 
