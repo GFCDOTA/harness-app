@@ -437,8 +437,14 @@ public final class InspectorApp extends Application {
                     snapshot(stage, "03-oraculo");
                 }),
                 new Passo(400, () -> bridge.exec("window.inspector.setView('events')")),
-                new Passo(400, () -> {
-                    System.out.println("[selftest] events   " + bridge.probe());
+                new Passo(400, () -> System.out.println("[selftest] events   " + bridge.probe())),
+                // O control plane sobe numa thread propria e leva alguns segundos;
+                // fotografar antes disso registraria a tela vazia como se fosse o
+                // estado normal.
+                new Passo(400, () -> bridge.exec("window.inspector.setView('agent')")),
+                new Passo(4000, () -> {
+                    System.out.println("[selftest] agente   " + bridge.probe());
+                    snapshot(stage, "05-agente");
                     launchStepOrClose(bridge, stage);
                 }));
         executar(roteiro, 0);

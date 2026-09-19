@@ -13,13 +13,14 @@ from harness_caps.registry import UNSUPPORTED, Registry
 from harness_caps.scene import SceneStore
 
 
-def _cfg(tmp_path) -> HarnessConfig:
+def _cfg(tmp_path, pipeline=None, sketchup=None) -> HarnessConfig:
     return HarnessConfig(
-        pipeline_repo=tmp_path / "sem-pipeline",
+        pipeline_repo=pipeline or (tmp_path / "sem-pipeline"),
         state_dir=tmp_path / "state",
         project="planta_74",
         consensus_path=None,
         pt_to_m="0.0259",
+        sketchup_exe=sketchup or str(tmp_path / "sem-sketchup.exe"),
     )
 
 
@@ -209,3 +210,81 @@ def test_cena_ausente_orienta_em_vez_de_estourar(tmp_path):
     out = r.invoke("list_objects", {})
     assert out["error"]["code"] == "SCENE_ERROR"
     assert "open_project" in out["error"]["message"]
+
+
+# -- artefatos .skp ----------------------------------------------------------
+def _repo_com_skps(tmp_path):
+    """Repo de mentira com .skp de datas diferentes, incluindo os que devem sair."""
+    import os
+    import time
+
+    root = tmp_path / "pipeline" / "artifacts" / "planta_74"
+    (root / "furnished").mkdir(parents=True)
+
+    def escreve(rel, quando, tamanho=1000):
+        path = root / rel
+        path.write_bytes(b"x" * tamanho)
+        os.utime(path, (quando, quando))
+        return path
+
+    agora = time.time()
+    escreve("planta_74.skp", agora - 90_000)
+    escreve("furnished/planta_74_furnished.skp", agora - 100)          # o mais novo
+    escreve("furnished/planta_74_furnished_black_wood_gold.skp", agora - 50_000)
+    escreve("furnished/scene.skp", agora)                              # NUNCA e' a planta
+    escreve("furnished/planta_74_furnished.skb", agora, tamanho=0)     # vazio
+    return tmp_path / "pipeline"
+
+
+def test_lista_skp_do_mais_recente_para_o_mais_antigo(tmp_path):
+    r = Registry(_cfg(tmp_path, pipeline=_repo_com_skps(tmp_path)))
+    data = r.invoke("list_skp_artifacts", {})["data"]
+    assert data["newest"]["name"] == "planta_74_furnished.skp"
+    nomes = [a["name"] for a in data["artifacts"]]
+    assert nomes[0] == "planta_74_furnished.skp"
+
+
+def test_scene_skp_nunca_entra_na_lista(tmp_path):
+    """Regra do projeto: scene.skp e' arquivo de trabalho do SketchUp.
+
+    E ele e' justamente o MAIS RECENTE — ordenar por data sem excluir entregaria
+    o arquivo errado toda vez.
+    """
+    r = Registry(_cfg(tmp_path, pipeline=_repo_com_skps(tmp_path)))
+    nomes = [a["name"] for a in r.invoke("list_skp_artifacts", {})["data"]["artifacts"]]
+    assert "scene.skp" not in nomes
+
+
+def test_arquivo_vazio_nao_conta_como_artefato(tmp_path):
+    r = Registry(_cfg(tmp_path, pipeline=_repo_com_skps(tmp_path)))
+    nomes = [a["name"] for a in r.invoke("list_skp_artifacts", {})["data"]["artifacts"]]
+    assert all(not n.endswith(".skb") for n in nomes)
+
+
+def test_abrir_sem_sketchup_instalado_diz_o_que_falta(tmp_path):
+    r = Registry(_cfg(tmp_path, pipeline=_repo_com_skps(tmp_path)))
+    out = r.invoke("open_skp_in_sketchup", {})
+    assert out["ok"] is False
+    assert "harness.json" in out["error"]["message"]
+
+
+def test_abrir_sem_nenhum_skp_explica_em_vez_de_estourar(tmp_path):
+    (tmp_path / "pipeline").mkdir()
+    r = Registry(_cfg(tmp_path, pipeline=tmp_path / "pipeline"))
+    out = r.invoke("open_skp_in_sketchup", {})
+    assert out["error"]["code"] == "SCENE_ERROR"
+    assert "materializado" in out["error"]["message"]
+
+
+def test_nome_que_nao_existe_lista_os_disponiveis(tmp_path):
+    r = Registry(_cfg(tmp_path, pipeline=_repo_com_skps(tmp_path)))
+    out = r.invoke("open_skp_in_sketchup", {"name": "cozinha_v9"})
+    assert out["error"]["code"] == "SCENE_ERROR"
+    assert "planta_74_furnished.skp" in out["error"]["message"]
+
+
+def test_abrir_o_skp_e_risco_MEDIUM_e_nao_desfazivel(tmp_path):
+    r = Registry(_cfg(tmp_path))
+    spec = {t["name"]: t for t in r.describe()["tools"]}["open_skp_in_sketchup"]
+    assert spec["risk"] == "MEDIUM"
+    assert spec["mutates"] is False, "abrir para ver nao altera o projeto"

@@ -160,6 +160,24 @@ class Registry:
             {"type": "object", "properties": {}}, self._list_rooms))
 
         self._add(ToolSpec(
+            "list_skp_artifacts",
+            "Lista os arquivos .skp do projeto, do mais RECENTE para o mais antigo, "
+            "com data e tamanho.",
+            {"type": "object", "properties": {}}, self._list_skp,
+            requires=("pipeline",)))
+
+        self._add(ToolSpec(
+            "open_skp_in_sketchup",
+            "Abre um .skp no SketchUp. Sem argumento, abre o MAIS RECENTE do projeto — "
+            "é o que responde 'abre a última planta'. Só abre para visualizar; "
+            "não altera o arquivo.",
+            {"type": "object", "properties": {
+                "name": {"type": "string",
+                         "description": "nome do arquivo; omitido = o mais recente"}}},
+            self._open_skp, risk=MEDIUM, requires=("pipeline", "SketchUp"),
+            timeout_sec=30))
+
+        self._add(ToolSpec(
             "list_objects", "Lista os objetos (móveis) da cena, opcionalmente de um cômodo.",
             {"type": "object", "properties": {"room_id": room}}, self._list_objects))
 
@@ -303,6 +321,32 @@ class Registry:
         for o in self.store.objects():
             counts[o.room_id] = counts.get(o.room_id, 0) + 1
         return {"rooms": [{**r, "objectCount": counts.get(r["id"], 0)} for r in doc["rooms"]]}
+
+    def _list_skp(self) -> dict:
+        items = self.pipe.skp_artifacts()
+        return {"count": len(items), "newest": items[0] if items else None,
+                "artifacts": items[:20]}
+
+    def _open_skp(self, name: str | None = None) -> dict:
+        items = self.pipe.skp_artifacts()
+        if not items:
+            raise SceneError(
+                f"nenhum .skp encontrado em artifacts/{self.cfg.project}/ "
+                "— o projeto ainda não foi materializado")
+        if name:
+            wanted = str(name).strip().lower()
+            matches = [i for i in items if wanted in i["name"].lower()]
+            if not matches:
+                raise SceneError(
+                    f"nenhum .skp com '{name}'. Disponíveis: "
+                    + ", ".join(i["name"] for i in items[:6]))
+            chosen = matches[0]
+        else:
+            chosen = items[0]
+        result = self.pipe.open_in_sketchup(chosen["path"])
+        return {"opened": chosen["name"], "path": chosen["path"],
+                "modified": chosen["modified"], "sizeMb": chosen["sizeMb"],
+                "wasNewest": chosen is items[0], "exe": result["exe"]}
 
     def _list_objects(self, room_id: str | None = None) -> dict:
         objs = self.store.objects(room_id)

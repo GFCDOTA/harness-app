@@ -11,13 +11,25 @@ import type { AgentOutcome, AgentPayload } from "./types";
  */
 
 const STATUS_LABEL: Record<string, string> = {
-  CLEAN: "validado",
+  CLEAN: "feito",
   GATE_FAILED: "gate reprovou",
   ANSWERED: "respondido",
   NEEDS_FELIPE: "precisa de você",
   UNAVAILABLE: "indisponível",
   EXHAUSTED: "sem desfecho"
 };
+
+/**
+ * O selo de CLEAN so pode dizer "validado" quando um gate REALMENTE rodou.
+ *
+ * Abrir um projeto muda o estado e termina CLEAN, mas nenhum gate mediu nada —
+ * e a tela dizia VALIDADO assim mesmo. Numa ferramenta cuja regra e' "o veredito
+ * vem do gate", isso e' o rotulo afirmando o que ninguem verificou.
+ */
+function statusLabel(status: string, gateCount: number): string {
+  if (status === "CLEAN") return gateCount > 0 ? "validado" : "feito";
+  return STATUS_LABEL[status] ?? status;
+}
 
 function Gate({ report }: { report: Record<string, unknown> }) {
   const gates = (report.gates ?? {}) as Record<string, { result: string; fails?: string[]; warns?: string[] }>;
@@ -53,7 +65,7 @@ function Outcome({ outcome }: { outcome: AgentOutcome }) {
     <div className="ag-outcome" data-status={outcome.status}>
       <div className="ag-outcome-head">
         <span className={`ag-badge b-${outcome.status}`}>
-          {STATUS_LABEL[outcome.status] ?? outcome.status}
+          {statusLabel(outcome.status, outcome.gateResults.length)}
         </span>
         <span className="ag-trace" title="trace desta execução">
           {outcome.traceId}

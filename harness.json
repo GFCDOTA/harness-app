@@ -9,6 +9,7 @@
 
   "_comment_scale": "PT_TO_M da planta_74 e' ancorado em cota e CONGELADO. Mudar isto faz a mobilia flutuar fora do shell.",
   "ptToM": "0.0259",
+  "sketchupExe": "C:/Program Files/SketchUp/SketchUp 2026/SketchUp/SketchUp.exe",
 
   "_comment_agent": "O modelo e' trocavel sem tocar em codigo. Precisa suportar tool calling nativo no Ollama.",
   "agentModel": "qwen2.5-coder:14b",

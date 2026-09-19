@@ -57,6 +57,7 @@ class HarnessConfig:
     project: str
     consensus_path: Path | None
     pt_to_m: str
+    sketchup_exe: str
     max_agent_attempts: int = 4
     gate_timeout_sec: int = 180
     #: risco que o host NUNCA executa sozinho — precisa de confirmação humana.
@@ -77,6 +78,7 @@ class HarnessConfig:
             "project": self.project,
             "consensusPath": str(self.consensus_path) if self.consensus_path else None,
             "ptToM": self.pt_to_m,
+            "sketchupExe": self.sketchup_exe,
             "maxAgentAttempts": self.max_agent_attempts,
             "confirmRisks": list(self.confirm_risks),
             "scenePath": str(self.scene_path),
@@ -104,6 +106,10 @@ def load() -> HarnessConfig:
     # estar no ambiente ANTES de core.scale ser importado. Ver pipeline.py.
     pt_to_m = str(_resolve("PT_TO_M", "ptToM", "0.0259"))
 
+    sketchup_exe = str(_resolve(
+        "HARNESS_SKETCHUP_EXE", "sketchupExe",
+        r"C:\Program Files\SketchUp\SketchUp 2026\SketchUp\SketchUp.exe"))
+
     attempts = _resolve("HARNESS_MAX_AGENT_ATTEMPTS", "maxAgentAttempts", 4)
     try:
         attempts = int(attempts)
@@ -116,5 +122,6 @@ def load() -> HarnessConfig:
         project=project,
         consensus_path=consensus,
         pt_to_m=pt_to_m,
+        sketchup_exe=sketchup_exe,
         max_agent_attempts=attempts,
     )

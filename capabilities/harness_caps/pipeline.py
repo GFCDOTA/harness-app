@@ -11,7 +11,9 @@ um PASS inventado não é.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 from .config import HarnessConfig
@@ -137,6 +139,65 @@ class Pipeline:
         if finding_type in getattr(mod, "NEEDS_VISION_TYPES", frozenset()):
             return mod.NEEDS_VISION
         return mod.NEEDS_FELIPE
+
+    # -- artefatos .skp -----------------------------------------------------
+    #: nomes que NUNCA são "a planta": arquivo de trabalho do SketchUp e scratch.
+    _SKP_IGNORE = ("scene.skp", "autosave", "recover", "backup")
+
+    def skp_artifacts(self) -> list[dict]:
+        """Os .skp do projeto, do mais recente para o mais antigo.
+
+        Ordena por data de escrita, nunca por nome: arquivo com sufixo de tema
+        (`_black_wood_gold`) ordena antes do canônico em ordem alfabética e
+        entregaria a planta errada. `scene.skp` é arquivo de trabalho do
+        SketchUp e fica de fora — regra do projeto, não heurística.
+        """
+        root = self.cfg.pipeline_repo / "artifacts" / self.cfg.project
+        if not root.exists():
+            return []
+        out = []
+        for path in root.rglob("*.skp"):
+            name = path.name.lower()
+            if any(bad in name for bad in self._SKP_IGNORE):
+                continue
+            stat = path.stat()
+            if stat.st_size == 0:
+                continue
+            out.append({
+                "name": path.name,
+                "path": str(path),
+                "relative": str(path.relative_to(root)),
+                "sizeMb": round(stat.st_size / 1e6, 2),
+                "modified": time.strftime("%Y-%m-%dT%H:%M:%S",
+                                          time.localtime(stat.st_mtime)),
+                "_mtime": stat.st_mtime,
+            })
+        out.sort(key=lambda item: item["_mtime"], reverse=True)
+        for item in out:
+            item.pop("_mtime")
+        return out
+
+    def open_in_sketchup(self, skp_path: str) -> dict:
+        """Abre um .skp no SketchUp desta máquina.
+
+        DESANEXADO de propósito: o SketchUp é um aplicativo que o Felipe vai usar,
+        não um subprocesso que o capability host precisa vigiar. Se ficasse preso
+        ao host, fechar o Harness fecharia o SketchUp junto.
+        """
+        path = Path(skp_path)
+        if not path.exists():
+            raise PipelineUnavailable("skp", f"arquivo não existe: {path}")
+        exe = Path(self.cfg.sketchup_exe)
+        if not exe.exists():
+            raise PipelineUnavailable(
+                "SketchUp", f"executável não encontrado em {exe} "
+                            "(ajuste `sketchupExe` no harness.json)")
+        subprocess.Popen(  # noqa: S603 — comando DECLARADO, argumento é caminho validado
+            [str(exe), str(path)],
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+            close_fds=True,
+        )
+        return {"opened": str(path), "exe": str(exe)}
 
     def availability(self) -> dict:
         """O que está realmente disponível AGORA. Usado pelo status do Harness."""

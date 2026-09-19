@@ -19,7 +19,8 @@ from harness_caps.config import HarnessConfig
 def _cfg(tmp_path, monkeypatch):
     cfg = HarnessConfig(pipeline_repo=tmp_path / "sem-pipeline",
                         state_dir=tmp_path / "state", project="planta_74",
-                        consensus_path=None, pt_to_m="0.0259")
+                        consensus_path=None, pt_to_m="0.0259",
+                        sketchup_exe=str(tmp_path / "sem-sketchup.exe"))
     monkeypatch.setattr(host_mod, "load", lambda: cfg)
     return cfg
 
