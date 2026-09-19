@@ -19,6 +19,77 @@
 | como a decisão foi tomada | [`docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md`](docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md) |
 | histórico por fatia | [`ITERATIONS.md`](ITERATIONS.md) |
 
+## COMO RETOMAR (sessão nova começa aqui)
+
+**Ação pendente, única:** abrir UMA pull request. Nada mais está em aberto.
+
+```
+base:    develop
+compare: feat/harness-master-slice1-impl
+```
+
+### Estado verificado em 2026-09-19
+
+| Item | Estado |
+|---|---|
+| working tree | limpo |
+| `feat/harness-master-slice1-impl` local × origin | idênticos, `d131c46` |
+| commits sobre `develop` | 17 |
+| PRs abertas no repo | **0** |
+| suítes | 171 Java (1 falha pré-existente) · 78 Python |
+
+### O que bloqueia
+
+O PAT fine-grained tem `pull_requests=read`; criar PR exige **write**.
+`createPullRequest` devolve `403 Resource not accessible`.
+
+Corrigir em **https://github.com/settings/personal-access-tokens** →
+o token em uso → `Repository permissions` → **Pull requests: Read and write**.
+Se ficar *Pending*, aprovar em
+**https://github.com/organizations/GFCDOTA/settings/personal-access-token-requests**.
+
+Editar permissão **não muda o valor do token** — não refazer `setx`.
+
+### ⚠️ Ler o token do REGISTRO, não do ambiente do processo
+
+`setx` grava no registro mas **não atualiza processos já rodando**. Um shell que
+nasceu antes da troca continua com o token velho e o diagnóstico sai errado.
+
+```powershell
+$env:GH_TOKEN = [Environment]::GetEnvironmentVariable('GH_TOKEN','User')
+& 'C:\Program Files\GitHub CLI\gh.exe' api repos/GFCDOTA/harness-app/pulls --jq 'length'
+```
+
+### Sequência exata
+
+1. `git fetch origin` e conferir que `origin/feat/harness-master-slice1-impl`
+   está em `d131c46` (ou mais à frente, se o Codex empurrou) e que o working
+   tree está limpo.
+2. Ler o token do registro (acima) e provar ESCRITA antes de tentar a PR.
+3. Criar **UMA** PR: `feat/harness-master-slice1-impl → develop`.
+4. **Não** abrir PR das branches intermediárias — a pilha é linear
+   (`master-orchestrator` ⊂ `slice1` ⊂ `slice1-impl`) e seria revisão duplicada.
+5. **Não** fazer merge.
+
+### Depois que a PR abrir
+
+A PR vira o ponto de convergência dos dois agentes. Nada de branch nova:
+
+```
+PR aberta → review → Codex corrige → push NA MESMA branch → PR atualiza → review final
+```
+
+Próxima fatia de código: **slice 2 (`apply_to_skp`)**, em
+[`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md). É fiação — `place_layout_skp.rb`
+já lê `LAYOUT_BOXES`/`LAYOUT_OUT`.
+
+### Higiene pendente
+
+Um PAT foi colado em texto puro no chat desta sessão (o de lifetime longo, que a
+org recusou). **Revogar**, se ainda existir.
+
+---
+
 ## CURRENT STATE
 
 O Harness virou o Control Plane e o slice 1 roda de ponta a ponta — **sobre o
