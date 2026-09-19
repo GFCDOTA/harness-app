@@ -144,4 +144,54 @@ export type LaunchResult = {
   startedAt: string;
 };
 
-export type View = "pipeline" | "events" | "oracle";
+export type View = "pipeline" | "events" | "oracle" | "agent";
+
+/** Uma capability publicada pelo capability host. */
+export type ToolInfo = {
+  name: string;
+  description: string;
+  risk: string;
+  undoable: boolean;
+  mutates: boolean;
+};
+
+/** Uma coisa que o agente REALMENTE fez (ou tentou) no sistema. */
+export type AgentAction = {
+  tool: string;
+  args: Record<string, unknown>;
+  ok: boolean;
+  /** Se a tool ALTERA o projeto. Leitura bem-sucedida nao e "mudou". */
+  mutating: boolean;
+  detail: string;
+};
+
+/** O desfecho de um comando. O status vem dos GATES, nao do texto do modelo. */
+export type AgentOutcome = {
+  status: string;
+  summary: string;
+  traceId: string;
+  undoAvailable: boolean;
+  changedSystem: boolean;
+  actions: AgentAction[];
+  gateResults: Record<string, unknown>[];
+  options: Record<string, unknown>[];
+};
+
+export type AgentTurn = { command: string; status: string; summary: string };
+
+export type AgentPayload = {
+  project: string;
+  activeRoom: string | null;
+  lastReferencedObject: string | null;
+  lockedObjects: string[];
+  pendingEdits: number;
+  undoAvailable: boolean;
+  model: string;
+  modelUp: boolean;
+  hostUp: boolean;
+  hostDetail: string;
+  tools: ToolInfo[];
+  unsupported: { name: string; reason: string }[];
+  turns: AgentTurn[];
+  last: AgentOutcome | null;
+};

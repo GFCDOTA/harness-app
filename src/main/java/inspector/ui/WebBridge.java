@@ -23,28 +23,33 @@ public final class WebBridge {
     private final WebEngine engine;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public WebBridge(WebEngine engine) {
+    public WebBridge(final WebEngine engine) {
         this.engine = engine;
     }
 
     /** {@code window.inspector.loadRun(json)} — troca a run inteira. */
-    public void loadRun(String runJson) {
+    public void loadRun(final String runJson) {
         call("loadRun", runJson);
     }
 
     /** {@code window.inspector.appendEvent(json)} — usado quando o SSE entrar. */
-    public void appendEvent(String eventJson) {
+    public void appendEvent(final String eventJson) {
         call("appendEvent", eventJson);
     }
 
     /** {@code window.inspector.setOracle(json)} — saúde dos serviços + consultas ao GPT. */
-    public void setOracle(String oracleJson) {
+    public void setOracle(final String oracleJson) {
         call("setOracle", oracleJson);
     }
 
     /** {@code window.inspector.setLaunchResult(json)} — o que aconteceu no botão. */
-    public void setLaunchResult(String resultJson) {
+    public void setLaunchResult(final String resultJson) {
         call("setLaunchResult", resultJson);
+    }
+
+    /** {@code window.inspector.setAgent(json)} — estado do agente e do último comando. */
+    public void setAgent(final String agentJson) {
+        call("setAgent", agentJson);
     }
 
     /**
@@ -55,35 +60,36 @@ public final class WebBridge {
      * Java fica exposto ao JavaScript, e o que volta e so texto.
      */
     public String drainRequests() {
-        Object r = engine.executeScript(API + ".__drain ? " + API + ".__drain() : '[]'");
-        return r == null ? "[]" : String.valueOf(r);
+        final var drained = this.engine.executeScript(
+                API + ".__drain ? " + API + ".__drain() : '[]'");
+        return drained == null ? "[]" : String.valueOf(drained);
     }
 
     /** {@code true} se a UI já registrou a API. */
     public boolean isReady() {
-        Object r = engine.executeScript(
+        final var ready = this.engine.executeScript(
                 "!!(" + API + " && " + API + ".ready === true)");
-        return Boolean.TRUE.equals(r);
+        return Boolean.TRUE.equals(ready);
     }
 
     /** Executa JS avulso. Existe para o smoke check dirigir a UI; nao e caminho de dados. */
-    public void exec(String js) {
-        engine.executeScript(js);
+    public void exec(final String js) {
+        this.engine.executeScript(js);
     }
 
     public String probe() {
-        return String.valueOf(engine.executeScript("JSON.stringify(" + API + ".probe())"));
+        return String.valueOf(this.engine.executeScript("JSON.stringify(" + API + ".probe())"));
     }
 
-    private void call(String fn, String json) {
-        engine.executeScript(API + "." + fn + "(" + asJsStringLiteral(json) + ")");
+    private void call(final String fn, final String json) {
+        this.engine.executeScript(API + "." + fn + "(" + asJsStringLiteral(json) + ")");
     }
 
-    private String asJsStringLiteral(String raw) {
+    private String asJsStringLiteral(final String raw) {
         try {
-            return mapper.writeValueAsString(raw);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("não consegui escapar o payload para o JS", e);
+            return this.mapper.writeValueAsString(raw);
+        } catch (final JsonProcessingException ex) {
+            throw new IllegalStateException("não consegui escapar o payload para o JS", ex);
         }
     }
 }

@@ -3,15 +3,17 @@ import { PipelineView } from "./PipelineView";
 import { EventsView } from "./EventsView";
 import { DetailPanel } from "./DetailPanel";
 import { OracleView } from "./OracleView";
+import { AgentView } from "./AgentView";
 import { latest, probe } from "./bridge";
 import { applyTheme, readTheme, type Theme } from "./theme";
-import type { LaunchResult, OraclePayload, RunPayload, View } from "./types";
+import type { AgentPayload, LaunchResult, OraclePayload, RunPayload, View } from "./types";
 
 function secs(v: number | null): string {
   return v === null ? "—" : (v / 1000).toFixed(2) + " s";
 }
 
 const TABS: { id: View; label: string }[] = [
+  { id: "agent", label: "Agente" },
   { id: "pipeline", label: "Pipeline" },
   { id: "events", label: "Events" },
   { id: "oracle", label: "Oráculo" }
@@ -25,6 +27,7 @@ export function App() {
   const [lastLaunch, setLastLaunch] = useState<LaunchResult | null>(null);
   // Um passo expandido por vez: mais controlavel e nao vira arvore de Natal.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [agent, setAgent] = useState<AgentPayload | null>(null);
   const [theme, setTheme] = useState<Theme>(readTheme);
 
   // A API e o flag `ready` sao instalados APOS a montagem. createRoot().render() e
@@ -61,6 +64,12 @@ export function App() {
       setLastLaunch(r);
       return r.serviceId;
     };
+    window.inspector.setAgent = (json: string) => {
+      const payload = JSON.parse(json) as AgentPayload;
+      latest.agent = payload;
+      setAgent(payload);
+      return payload.tools.length;
+    };
     window.inspector.setView = (v: View) => {
       latest.view = v;
       setView(v);
@@ -79,7 +88,23 @@ export function App() {
   }, [theme]);
 
   if (!run) {
-    return <div className="empty">esperando a run do Java…</div>;
+    // O agente NAO depende de trace: operar a planta e' independente de ter uma
+    // run aberta. Travar a tela inteira aqui deixaria o comando inacessivel.
+    return (
+      <div className="app">
+        <header className="top">
+          <div className="top-l">
+            <h1>{agent?.project ?? "harness"}</h1>
+            <div className="top-sum">sem trace carregado · control plane disponível</div>
+          </div>
+        </header>
+        <main className="body">
+          <div className="canvas">
+            <AgentView agent={agent} />
+          </div>
+        </main>
+      </div>
+    );
   }
 
   const steps = run.pipeline.nodes;
@@ -131,7 +156,9 @@ export function App() {
 
       <main className="body">
         <div className="canvas">
-          {view === "pipeline" ? (
+          {view === "agent" ? (
+            <AgentView agent={agent} />
+          ) : view === "pipeline" ? (
             <PipelineView
               run={run}
               selectedId={selectedId}
