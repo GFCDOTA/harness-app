@@ -9,8 +9,7 @@ public record LaunchResult(
         boolean ok,
         Integer exitCode,
         String output,
-        String startedAt
-) {
+        String startedAt) {
     public LaunchResult {
         if (serviceId == null || serviceId.isBlank()) {
             throw new IllegalArgumentException("serviceId e obrigatorio");

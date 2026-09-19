@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SourceVerifierTest {
 
-    private static Path repo(Path dir, String rel, String conteudo) throws Exception {
+    private static Path repo(final Path dir, final String rel, final String conteudo) throws Exception {
         Path f = dir.resolve(rel);
         Files.createDirectories(f.getParent());
         Files.writeString(f, conteudo, StandardCharsets.UTF_8);
@@ -23,7 +23,7 @@ class SourceVerifierTest {
     }
 
     @Test
-    void acha_modulo_simbolo_e_biblioteca(@TempDir Path dir) throws Exception {
+    void acha_modulo_simbolo_e_biblioteca(final @TempDir Path dir) throws Exception {
         repo(dir, "tools/x.py", "import urllib.request\n\ndef embed(txt):\n    return []\n");
         SourceVerification v = new SourceVerifier(dir).verify(
                 new Implementation("python", "tools/x.py", "embed", List.of("urllib"), ""));
@@ -35,7 +35,7 @@ class SourceVerifierTest {
     }
 
     @Test
-    void bibliotecaDeclaradaQueOmoduloNaoImportaAparaceComoFALTANDO(@TempDir Path dir) throws Exception {
+    void bibliotecaDeclaradaQueOmoduloNaoImportaAparaceComoFALTANDO(final @TempDir Path dir) throws Exception {
         repo(dir, "tools/x.py", "import urllib.request\n\ndef search(q):\n    return []\n");
         SourceVerification v = new SourceVerifier(dir).verify(
                 new Implementation("python", "tools/x.py", "search", List.of("qdrant_client"), ""));
@@ -45,7 +45,7 @@ class SourceVerifierTest {
     }
 
     @Test
-    void simboloInexistenteNaoPassa(@TempDir Path dir) throws Exception {
+    void simboloInexistenteNaoPassa(final @TempDir Path dir) throws Exception {
         repo(dir, "tools/x.py", "def outra():\n    pass\n");
         SourceVerification v = new SourceVerifier(dir).verify(
                 new Implementation("python", "tools/x.py", "find_best_candidate", List.of(), ""));
@@ -55,7 +55,7 @@ class SourceVerifierTest {
     }
 
     @Test
-    void arquivoInexistenteEhReportadoComoNaoEncontrado(@TempDir Path dir) {
+    void arquivoInexistenteEhReportadoComoNaoEncontrado(final @TempDir Path dir) {
         SourceVerification v = new SourceVerifier(dir).verify(
                 new Implementation("python", "tools/fantasma.py", "x", List.of(), ""));
         assertTrue(v.checked());
@@ -63,7 +63,7 @@ class SourceVerifierTest {
     }
 
     @Test
-    void repoAusenteEhNAO_VERIFICADO_naoNAO_EXISTE(@TempDir Path dir) {
+    void repoAusenteEhNAO_VERIFICADO_naoNAO_EXISTE(final @TempDir Path dir) {
         SourceVerification v = new SourceVerifier(dir.resolve("nao_existe")).verify(
                 new Implementation("python", "tools/x.py", "y", List.of(), ""));
         assertFalse(v.checked(), "sem repo, a UI precisa dizer 'nao verificado'");
@@ -71,14 +71,14 @@ class SourceVerifierTest {
     }
 
     @Test
-    void reconheceClasseAlemDeFuncao(@TempDir Path dir) throws Exception {
+    void reconheceClasseAlemDeFuncao(final @TempDir Path dir) throws Exception {
         repo(dir, "m.py", "class InfraUnavailable(RuntimeError):\n    pass\n");
         assertTrue(new SourceVerifier(dir).verify(
                 new Implementation("python", "m.py", "InfraUnavailable", List.of(), "")).symbolFound());
     }
 
     @Test
-    void naoConfundeSubstringComSimbolo(@TempDir Path dir) throws Exception {
+    void naoConfundeSubstringComSimbolo(final @TempDir Path dir) throws Exception {
         repo(dir, "m.py", "def embedding_helper():\n    pass\n");
         assertFalse(new SourceVerifier(dir).verify(
                 new Implementation("python", "m.py", "embed", List.of(), "")).symbolFound(),
@@ -86,7 +86,7 @@ class SourceVerifierTest {
     }
 
     @Test
-    void reconheceFromImportEimportPontuado(@TempDir Path dir) throws Exception {
+    void reconheceFromImportEimportPontuado(final @TempDir Path dir) throws Exception {
         repo(dir, "m.py", "from sqlite3 import connect\nimport urllib.request\ndef f():\n    pass\n");
         SourceVerifier v = new SourceVerifier(dir);
         assertTrue(v.verify(new Implementation("python", "m.py", "f", List.of("sqlite3"), "")).fullyVerified());

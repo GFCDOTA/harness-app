@@ -26,8 +26,7 @@ public record GptConsult(
         String declaredWhen,
         long sizeBytes,
         String question,
-        String answer
-) {
+        String answer) {
     public GptConsult {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("id é obrigatório");
         question = question == null ? "" : question;

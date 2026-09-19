@@ -27,8 +27,8 @@ public final class ProcessServiceLauncher implements ServiceLauncher {
     private static final int OUTPUT_CAP = 4000;
 
     @Override
-    public LaunchResult run(ServiceAction action) {
-        String startedAt = Instant.now().toString();
+    public LaunchResult run(final ServiceAction action) {
+        final var startedAt = Instant.now().toString();
         try {
             ProcessBuilder pb = new ProcessBuilder(action.command());
             if (action.workingDir() != null && !action.workingDir().isBlank()) {
@@ -41,26 +41,27 @@ public final class ProcessServiceLauncher implements ServiceLauncher {
             try (var in = p.getInputStream()) {
                 output = new String(in.readAllBytes(), StandardCharsets.UTF_8);
             }
-            boolean done = p.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            final var done = p.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!done) {
                 p.destroy();
                 return new LaunchResult(action.serviceId(), false, null,
                         "passou de " + TIMEOUT_SECONDS + "s e foi interrompido:\n" + cap(output), startedAt);
             }
-            int code = p.exitValue();
+            final var code = p.exitValue();
             return new LaunchResult(action.serviceId(), code == 0, code, cap(output), startedAt);
-        } catch (IOException ex) {
+        } catch (final IOException ex) {
             return new LaunchResult(action.serviceId(), false, null,
                     "nao consegui executar: " + ex.getMessage(), startedAt);
-        } catch (InterruptedException ex) {
+        } catch (final InterruptedException ex) {
             Thread.currentThread().interrupt();
             return new LaunchResult(action.serviceId(), false, null, "interrompido", startedAt);
         }
     }
 
-    private static String cap(String s) {
-        if (s == null) return "";
-        String t = s.strip();
-        return t.length() <= OUTPUT_CAP ? t : t.substring(0, OUTPUT_CAP - 1) + "…";
+    private static String cap(final String text) {
+        if (text == null) return "";
+        final var trimmed = text.strip();
+        return trimmed.length() <= OUTPUT_CAP
+                ? trimmed : trimmed.substring(0, OUTPUT_CAP - 1) + "…";
     }
 }

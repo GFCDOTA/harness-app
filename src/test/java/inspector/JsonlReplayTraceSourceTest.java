@@ -23,7 +23,7 @@ class JsonlReplayTraceSourceTest {
         return Paths.get("src", "test", "resources", "traces", "sample_run.jsonl");
     }
 
-    private static List<TraceEvent> collect(JsonlReplayTraceSource src) {
+    private static List<TraceEvent> collect(final JsonlReplayTraceSource src) {
         List<TraceEvent> out = new ArrayList<>();
         src.stream(out::add);
         return out;
@@ -54,7 +54,7 @@ class JsonlReplayTraceSourceTest {
     }
 
     @Test
-    void ignoraLinhaEmBrancoMasFalhaAltoEmLinhaInvalida(@TempDir Path dir) throws Exception {
+    void ignoraLinhaEmBrancoMasFalhaAltoEmLinhaInvalida(final @TempDir Path dir) throws Exception {
         Path ok = dir.resolve("ok.jsonl");
         Files.writeString(ok,
                 "{\"runId\":\"r1\",\"seq\":1,\"name\":\"run.started\"}\n"
@@ -78,7 +78,7 @@ class JsonlReplayTraceSourceTest {
     }
 
     @Test
-    void newestInEscolheOArquivoMaisRecente(@TempDir Path dir) throws Exception {
+    void newestInEscolheOArquivoMaisRecente(final @TempDir Path dir) throws Exception {
         Path velho = dir.resolve("velho.jsonl");
         Path novo = dir.resolve("novo.jsonl");
         Files.writeString(velho, "{\"runId\":\"r1\",\"seq\":1,\"name\":\"a\"}\n", StandardCharsets.UTF_8);

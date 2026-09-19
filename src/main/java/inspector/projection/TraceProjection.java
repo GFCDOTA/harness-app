@@ -52,23 +52,23 @@ public final class TraceProjection {
         this(null);
     }
 
-    public TraceProjection(SourceVerifier verifier) {
+    public TraceProjection(final SourceVerifier verifier) {
         this.verifier = verifier;
     }
 
-    public String toJson(Run run, String sourceDescription) {
+    public String toJson(final Run run, final String sourceDescription) {
         try {
-            return mapper.writeValueAsString(toMap(run, sourceDescription));
-        } catch (JsonProcessingException e) {
+            return this.mapper.writeValueAsString(toMap(run, sourceDescription));
+        } catch (final JsonProcessingException e) {
             throw new IllegalStateException("não consegui serializar a projeção da run", e);
         }
     }
 
-    Map<String, Object> toMap(Run run, String sourceDescription) {
+    Map<String, Object> toMap(final Run run, final String sourceDescription) {
         Instant t0 = parseTs(run.first().ts());
 
         List<Map<String, Object>> boxes = new ArrayList<>(run.eventCount());
-        for (TraceEvent e : run.events()) {
+        for (final TraceEvent e : run.events()) {
             Map<String, Object> box = new LinkedHashMap<>();
             box.put("seq", e.seq());
             box.put("tPlusMs", offsetMs(t0, e.ts()));
@@ -97,11 +97,11 @@ public final class TraceProjection {
     }
 
     /** A visao de grafo: passos e ligacoes, para a Pipeline View. */
-    Map<String, Object> pipelineOf(Run run) {
+    Map<String, Object> pipelineOf(final Run run) {
         Pipeline p = Pipeline.from(run);
 
         List<Map<String, Object>> nodes = new ArrayList<>(p.steps().size());
-        for (PipelineStep st : p.steps()) {
+        for (final PipelineStep st : p.steps()) {
             Map<String, Object> n = new LinkedHashMap<>();
             n.put("id", st.id());
             n.put("category", st.category());
@@ -117,7 +117,7 @@ public final class TraceProjection {
             n.put("detail", stepDetail(st));
 
             List<Map<String, Object>> measurements = new ArrayList<>(st.eventCount());
-            for (TraceEvent e : st.events()) {
+            for (final TraceEvent e : st.events()) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("seq", e.seq());
                 m.put("name", e.name());
@@ -138,7 +138,7 @@ public final class TraceProjection {
         }
 
         List<Map<String, Object>> edges = new ArrayList<>(p.edges().size());
-        for (PipelineEdge e : p.edges()) {
+        for (final PipelineEdge e : p.edges()) {
             Map<String, Object> ed = new LinkedHashMap<>();
             ed.put("id", e.id());
             ed.put("source", e.from());
@@ -149,7 +149,7 @@ public final class TraceProjection {
         }
 
         List<Map<String, Object>> calls = new ArrayList<>(p.calls().size());
-        for (PipelineEdge e : p.calls()) {
+        for (final PipelineEdge e : p.calls()) {
             Map<String, Object> ed = new LinkedHashMap<>();
             ed.put("id", e.id());
             ed.put("source", e.from());
@@ -167,9 +167,9 @@ public final class TraceProjection {
     }
 
     /** Detalhe do passo: o primeiro evento do grupo que tenha algo a dizer. */
-    static String stepDetail(PipelineStep st) {
-        for (TraceEvent e : st.events()) {
-            String d = detail(e);
+    static String stepDetail(final PipelineStep st) {
+        for (final TraceEvent e : st.events()) {
+            final var d = detail(e);
             if (!d.isEmpty()) return d;
         }
         return "";
@@ -182,7 +182,7 @@ public final class TraceProjection {
      * Python" mas aparecia na tela como "HTTP externo" e induzia ao erro: Ollama e
      * Qdrant rodam NESTA máquina.
      */
-    Map<String, Object> profileMap(String component) {
+    Map<String, Object> profileMap(final String component) {
         ComponentProfile p = ComponentCatalog.profileFor(component);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("catalogued", p.catalogued());
@@ -207,7 +207,7 @@ public final class TraceProjection {
      * sobre o código e vem acompanhado do resultado da verificação; {@code pattern} e
      * {@code concepts} são explicação e estão marcados como tal.
      */
-    Map<String, Object> implementationMap(String component) {
+    Map<String, Object> implementationMap(final String component) {
         ExecutionFacts f = ImplementationCatalog.factsFor(component);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("declared", !f.impl().isEmpty());
@@ -222,7 +222,7 @@ public final class TraceProjection {
 
         SourceVerification v = verifier == null
                 ? SourceVerification.notChecked("verificador não configurado")
-                : verifier.verify(f.impl());
+                : this.verifier.verify(f.impl());
         Map<String, Object> vm = new LinkedHashMap<>();
         vm.put("checked", v.checked());
         vm.put("moduleFound", v.moduleFound());
@@ -235,12 +235,12 @@ public final class TraceProjection {
         return m;
     }
 
-    static String detail(TraceEvent e) {
+    static String detail(final TraceEvent e) {
         Map<String, Object> meta = e.meta();
         StringBuilder sb = new StringBuilder();
-        for (String k : DETAIL_KEYS) {
+        for (final String k : DETAIL_KEYS) {
             if (!meta.containsKey(k)) continue;
-            Object v = meta.get(k);
+            final var v = meta.get(k);
             if (v == null) continue;
             if (!sb.isEmpty()) sb.append(" · ");
             sb.append(k).append('=').append(v);
@@ -252,17 +252,17 @@ public final class TraceProjection {
         return sb.toString();
     }
 
-    private static Instant parseTs(String ts) {
+    private static Instant parseTs(final String ts) {
         if (ts == null) return null;
         try {
             return Instant.parse(ts);
-        } catch (RuntimeException ex) {
+        } catch (final RuntimeException ex) {
             return null;
         }
     }
 
     /** Offset desde o início da run. Sem base confiável, devolve null — nunca 0. */
-    private static Long offsetMs(Instant t0, String ts) {
+    private static Long offsetMs(final Instant t0, final String ts) {
         Instant t = parseTs(ts);
         if (t0 == null || t == null) return null;
         return t.toEpochMilli() - t0.toEpochMilli();

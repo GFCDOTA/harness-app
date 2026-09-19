@@ -14,7 +14,7 @@ class ComponentCatalogTest {
     void ollamaEqdrantSaoLocais_naoInternet() {
         assertEquals("HTTP local", ComponentCatalog.profileFor("ollama.nomic-embed-text").kindLabel());
         assertEquals("Docker local", ComponentCatalog.profileFor("qdrant.rag_chunks").kindLabel());
-        for (String c : new String[]{"ollama.nomic-embed-text", "qdrant.rag_chunks", "ollama.deepseek-r1:14b"}) {
+        for (final String c : new String[]{"ollama.nomic-embed-text", "qdrant.rag_chunks", "ollama.deepseek-r1:14b"}) {
             assertNotEquals("HTTP internet", ComponentCatalog.profileFor(c).kindLabel(),
                     c + " roda nesta maquina");
         }
@@ -47,7 +47,7 @@ class ComponentCatalogTest {
 
     @Test
     void osTresGatesCaemNaMesmaEntradaPelaFamilia() {
-        for (String g : new String[]{"gate.opening_host", "gate.wall_overlap", "gate.run_deterministic_gates"}) {
+        for (final String g : new String[]{"gate.opening_host", "gate.wall_overlap", "gate.run_deterministic_gates"}) {
             assertEquals("Gate determinístico", ComponentCatalog.profileFor(g).humanName(), g);
             assertEquals(ComponentProfile.CODIGO_LOCAL, ComponentCatalog.profileFor(g).kind(), g);
         }
@@ -71,7 +71,7 @@ class ComponentCatalogTest {
 
     @Test
     void todoPerfilCatalogadoRespondeAsCincoPerguntas() {
-        for (String c : new String[]{"ollama.nomic-embed-text", "ollama.deepseek-r1:14b",
+        for (final String c : new String[]{"ollama.nomic-embed-text", "ollama.deepseek-r1:14b",
                 "qdrant.rag_chunks", "reference_db.retrieve", "reference_db.faceted",
                 "gate.opening_host", "architect_program", "correction_loop"}) {
             ComponentProfile p = ComponentCatalog.profileFor(c);

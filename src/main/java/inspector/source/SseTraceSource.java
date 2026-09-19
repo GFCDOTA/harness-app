@@ -21,23 +21,23 @@ public final class SseTraceSource implements TraceSource {
 
     private final URI endpoint;
 
-    public SseTraceSource(URI endpoint) {
+    public SseTraceSource(final URI endpoint) {
         this.endpoint = endpoint;
     }
 
     public URI endpoint() {
-        return endpoint;
+        return this.endpoint;
     }
 
     @Override
     public String describe() {
-        return "sse-live (não implementado): " + endpoint;
+        return "sse-live (não implementado): " + this.endpoint;
     }
 
     @Override
-    public void stream(Consumer<TraceEvent> sink) {
+    public void stream(final Consumer<TraceEvent> sink) {
         throw new UnsupportedOperationException(
                 "SseTraceSource chega na fase do transporte; hoje a fonte é JsonlReplayTraceSource. "
-                        + "Endpoint previsto: " + endpoint);
+                        + "Endpoint previsto: " + this.endpoint);
     }
 }

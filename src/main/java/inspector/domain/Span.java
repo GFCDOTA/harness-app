@@ -16,21 +16,20 @@ public record Span(
         String category,
         String status,
         Double durationMs,
-        List<TraceEvent> events
-) {
+        List<TraceEvent> events) {
     public Span {
         events = List.copyOf(events);
     }
 
     /** Deriva os spans preservando a ordem de primeira aparição. */
-    public static List<Span> from(List<TraceEvent> events) {
+    public static List<Span> from(final List<TraceEvent> events) {
         Map<String, List<TraceEvent>> grouped = new LinkedHashMap<>();
-        for (TraceEvent e : events) {
-            String key = e.spanId() == null ? "" : e.spanId();
+        for (final TraceEvent e : events) {
+            final var key = e.spanId() == null ? "" : e.spanId();
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(e);
         }
         List<Span> spans = new ArrayList<>(grouped.size());
-        for (Map.Entry<String, List<TraceEvent>> entry : grouped.entrySet()) {
+        for (final Map.Entry<String, List<TraceEvent>> entry : grouped.entrySet()) {
             List<TraceEvent> evs = entry.getValue();
             TraceEvent first = evs.getFirst();
             TraceEvent last = evs.getLast();
@@ -46,18 +45,18 @@ public record Span(
         return List.copyOf(spans);
     }
 
-    private static String firstNonNull(List<TraceEvent> evs,
-                                       java.util.function.Function<TraceEvent, String> get) {
-        for (TraceEvent e : evs) {
-            String v = get.apply(e);
+    private static String firstNonNull(final List<TraceEvent> evs,
+                                       final java.util.function.Function<TraceEvent, String> get) {
+        for (final TraceEvent e : evs) {
+            final var v = get.apply(e);
             if (v != null && !v.isBlank()) return v;
         }
         return null;
     }
 
-    private static Double lastDuration(List<TraceEvent> evs) {
+    private static Double lastDuration(final List<TraceEvent> evs) {
         Double found = null;
-        for (TraceEvent e : evs) {
+        for (final TraceEvent e : evs) {
             if (e.durationMs() != null) found = e.durationMs();
         }
         return found;

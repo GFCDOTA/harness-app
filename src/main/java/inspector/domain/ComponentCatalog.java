@@ -199,9 +199,9 @@ public final class ComponentCatalog {
     );
 
     /** Perfil do componente. Desconhecido devolve o que dá para derivar, sem inventar. */
-    public static ComponentProfile profileFor(String component) {
-        String c = component == null ? "" : component;
-        for (ComponentProfile p : PROFILES) {
+    public static ComponentProfile profileFor(final String component) {
+        final var c = component == null ? "" : component;
+        for (final ComponentProfile p : PROFILES) {
             if (c.startsWith(p.component())) {
                 return new ComponentProfile(c, true, p.humanName(), p.kind(), p.kindLabel(),
                         p.transport(), p.host(), p.endpoint(), p.role(), p.input(),
@@ -216,8 +216,8 @@ public final class ComponentCatalog {
      * não conhece o resto — numa ferramenta de estudo, um vazio honesto vale mais que
      * uma explicação plausível e errada.
      */
-    private static ComponentProfile unknown(String component) {
-        boolean pareceServico = component.contains(".") && !component.startsWith("gate.");
+    private static ComponentProfile unknown(final String component) {
+        final var pareceServico = component.contains(".") && !component.startsWith("gate.");
         return new ComponentProfile(component, false, component,
                 pareceServico ? ComponentProfile.HTTP_LOCAL : ComponentProfile.CODIGO_LOCAL,
                 pareceServico ? "não catalogado" : "código local",

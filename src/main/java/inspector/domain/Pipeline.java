@@ -41,7 +41,7 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
     private static final List<String> OUTCOMES = List.of("failed", "degraded", "skipped", "ok");
     static final String RUNNING = "running";
 
-    public static Pipeline from(Run run) {
+    public static Pipeline from(final Run run) {
         List<List<TraceEvent>> groups = group(run.events());
 
         List<PipelineStep> steps = new ArrayList<>(groups.size());
@@ -72,16 +72,16 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
      * <p>Evento SEM span (gates, correction loop, marcadores) continua na regra de
      * corrida consecutiva: {@code harnessKind}, senao categoria + familia.
      */
-    private static List<List<TraceEvent>> group(List<TraceEvent> events) {
+    private static List<List<TraceEvent>> group(final List<TraceEvent> events) {
         List<List<TraceEvent>> groups = new ArrayList<>();
         Map<String, List<TraceEvent>> bySpan = new LinkedHashMap<>();
         String currentKey = null;
         List<TraceEvent> spanless = null;
 
-        for (TraceEvent e : events) {
+        for (final TraceEvent e : events) {
             if (isTerminalMarker(e)) continue;
 
-            String span = e.spanId();
+            final var span = e.spanId();
             if (span != null && !span.isBlank()) {
                 List<TraceEvent> grupo = bySpan.get(span);
                 if (grupo == null) {
@@ -96,7 +96,7 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
                 continue;
             }
 
-            String key = stepKey(e);
+            final var key = stepKey(e);
             if (spanless == null || !key.equals(currentKey)) {
                 spanless = new ArrayList<>();
                 groups.add(spanless);
@@ -111,10 +111,10 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
      * Quem CHAMOU quem, derivado de {@code parentSpanId} — fato do trace, nao
      * suposicao. Passo A chama B quando algum evento de B aponta para um span de A.
      */
-    private static List<PipelineEdge> callEdges(List<PipelineStep> steps) {
+    private static List<PipelineEdge> callEdges(final List<PipelineStep> steps) {
         Map<String, String> spanToStep = new LinkedHashMap<>();
-        for (PipelineStep st : steps) {
-            for (TraceEvent e : st.events()) {
+        for (final PipelineStep st : steps) {
+            for (final TraceEvent e : st.events()) {
                 if (e.spanId() != null && !e.spanId().isBlank()) {
                     spanToStep.putIfAbsent(e.spanId(), st.id());
                 }
@@ -122,13 +122,13 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
         }
         List<PipelineEdge> calls = new ArrayList<>();
         Set<String> vistos = new LinkedHashSet<>();
-        for (PipelineStep st : steps) {
-            for (TraceEvent e : st.events()) {
-                String pai = e.parentSpanId();
+        for (final PipelineStep st : steps) {
+            for (final TraceEvent e : st.events()) {
+                final var pai = e.parentSpanId();
                 if (pai == null || pai.isBlank()) continue;
-                String de = spanToStep.get(pai);
+                final var de = spanToStep.get(pai);
                 if (de == null || de.equals(st.id())) continue;
-                String chave = de + ">" + st.id();
+                final var chave = de + ">" + st.id();
                 if (vistos.add(chave)) {
                     calls.add(PipelineEdge.call(de, st.id()));
                 }
@@ -137,12 +137,12 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
         return calls;
     }
 
-    static boolean isTerminalMarker(TraceEvent e) {
+    static boolean isTerminalMarker(final TraceEvent e) {
         return "run.started".equals(e.name()) || "run.finished".equals(e.name());
     }
 
-    static String stepKey(TraceEvent e) {
-        Object harnessKind = e.meta().get("harnessKind");
+    static String stepKey(final TraceEvent e) {
+        final var harnessKind = e.meta().get("harnessKind");
         if (harnessKind != null && !String.valueOf(harnessKind).isBlank()) {
             return "harnessKind:" + harnessKind;
         }
@@ -150,15 +150,15 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
     }
 
     /** Familia = trecho antes do primeiro ponto. {@code null} vira "?". */
-    static String family(String component) {
+    static String family(final String component) {
         if (component == null || component.isBlank()) return "?";
-        int dot = component.indexOf('.');
+        final var dot = component.indexOf('.');
         return dot < 0 ? component : component.substring(0, dot);
     }
 
-    private static PipelineStep toStep(String id, List<TraceEvent> evs) {
+    private static PipelineStep toStep(final String id, final List<TraceEvent> evs) {
         TraceEvent first = evs.getFirst();
-        String dominant = dominantComponent(evs);
+        final var dominant = dominantComponent(evs);
         return new PipelineStep(
                 id,
                 first.category(),
@@ -179,20 +179,20 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
      * roda agora e o ComponentCatalog, com rotulo honesto.
      */
 
-    static boolean declaresFallback(TraceEvent e) {
+    static boolean declaresFallback(final TraceEvent e) {
         return Boolean.TRUE.equals(e.meta().get("fallbackTriggered"));
     }
 
     /** Component mais frequente do grupo; empate resolve pelo primeiro que apareceu. */
-    static String dominantComponent(List<TraceEvent> evs) {
+    static String dominantComponent(final List<TraceEvent> evs) {
         Map<String, Integer> counts = new LinkedHashMap<>();
-        for (TraceEvent e : evs) {
+        for (final TraceEvent e : evs) {
             if (e.component() == null) continue;
             counts.merge(e.component(), 1, Integer::sum);
         }
         String best = null;
         int bestN = -1;
-        for (Map.Entry<String, Integer> en : counts.entrySet()) {
+        for (final Map.Entry<String, Integer> en : counts.entrySet()) {
             if (en.getValue() > bestN) {
                 best = en.getKey();
                 bestN = en.getValue();
@@ -206,15 +206,15 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
      * {@code running} — que e exatamente o estado que a UI precisa acender quando o
      * tempo real chegar. Sem nada, {@code null}.
      */
-    static String worstStatus(List<TraceEvent> evs) {
+    static String worstStatus(final List<TraceEvent> evs) {
         String worst = null;
-        int worstRank = Integer.MAX_VALUE;
-        boolean opened = false;
-        for (TraceEvent e : evs) {
+        var worstRank = Integer.MAX_VALUE;
+        var opened = false;
+        for (final TraceEvent e : evs) {
             if ("started".equals(e.status())) opened = true;
             // status e opcional no envelope, e List.of().indexOf(null) lanca NPE.
             if (e.status() == null) continue;
-            int rank = OUTCOMES.indexOf(e.status());
+            final var rank = OUTCOMES.indexOf(e.status());
             if (rank < 0) continue;
             if (rank < worstRank) {
                 worstRank = rank;
@@ -226,9 +226,9 @@ public record Pipeline(List<PipelineStep> steps, List<PipelineEdge> edges, List<
     }
 
     /** Maior medida do grupo. Sem nenhuma medida, {@code null} — nunca 0.0. */
-    static Double maxDuration(List<TraceEvent> evs) {
+    static Double maxDuration(final List<TraceEvent> evs) {
         Double max = null;
-        for (TraceEvent e : evs) {
+        for (final TraceEvent e : evs) {
             if (e.durationMs() == null) continue;
             if (max == null || e.durationMs() > max) max = e.durationMs();
         }

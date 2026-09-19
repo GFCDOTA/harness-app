@@ -24,7 +24,7 @@ class SseTraceSourceTest {
 
     @Test
     void describeDizHonestamenteQueNaoEstaImplementado() {
-        String d = new SseTraceSource(EP).describe();
+        final var d = new SseTraceSource(EP).describe();
         assertTrue(d.contains("nao implementado") || d.contains("implementado"), d);
         assertTrue(d.contains("8788"), "a UI precisa poder mostrar o endpoint previsto");
     }

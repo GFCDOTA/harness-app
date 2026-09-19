@@ -19,8 +19,7 @@ public record PipelineStep(
         boolean fallbackEntry,
         long seqFrom,
         long seqTo,
-        List<TraceEvent> events
-) {
+        List<TraceEvent> events) {
     public PipelineStep {
         events = List.copyOf(events);
     }

@@ -100,9 +100,9 @@ public final class ImplementationCatalog {
     );
 
     /** Fatos do componente. Desconhecido devolve {@link ExecutionFacts#NONE}, sem chute. */
-    public static ExecutionFacts factsFor(String component) {
-        String c = component == null ? "" : component;
-        for (Map.Entry<String, ExecutionFacts> e : ENTRIES) {
+    public static ExecutionFacts factsFor(final String component) {
+        final var c = component == null ? "" : component;
+        for (final Map.Entry<String, ExecutionFacts> e : ENTRIES) {
             if (c.startsWith(e.getKey())) return e.getValue();
         }
         return ExecutionFacts.NONE;

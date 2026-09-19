@@ -12,8 +12,7 @@ public record ServiceHealth(
         Integer httpStatus,
         Long latencyMs,
         String detail,
-        String checkedAt
-) {
+        String checkedAt) {
     public ServiceHealth {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("id é obrigatório");
     }

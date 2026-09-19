@@ -23,15 +23,15 @@ public record PipelineEdge(String id, String from, String to, String kind) {
     /** Não é execução: é o código que implementa, ou a lib que ele usa. */
     public static final String IMPLEMENTS = "implements";
 
-    public static PipelineEdge sequence(String from, String to) {
+    public static PipelineEdge sequence(final String from, final String to) {
         return new PipelineEdge(from + "->" + to, from, to, SEQUENCE);
     }
 
-    public static PipelineEdge fallback(String from, String to) {
+    public static PipelineEdge fallback(final String from, final String to) {
         return new PipelineEdge(from + "->" + to + ":fallback", from, to, FALLBACK);
     }
 
-    public static PipelineEdge call(String from, String to) {
+    public static PipelineEdge call(final String from, final String to) {
         return new PipelineEdge(from + "->" + to + ":call", from, to, CALL);
     }
 

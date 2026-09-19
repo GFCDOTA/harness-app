@@ -23,7 +23,7 @@ public final class TraceLocator {
     }
 
     /** Resolve usando as fontes do ambiente atual. */
-    public static JsonlReplayTraceSource fromEnvironment(Path conventionalDir) {
+    public static JsonlReplayTraceSource fromEnvironment(final Path conventionalDir) {
         return new JsonlReplayTraceSource(resolve(
                 System.getProperty(PROP_FILE),
                 System.getProperty(PROP_DIR),
@@ -35,14 +35,15 @@ public final class TraceLocator {
      * Precedência: arquivo explícito → diretório explícito → variável de ambiente →
      * diretório convencional (só se existir). Nenhuma delas: erro instrutivo.
      */
-    public static Path resolve(String explicitFile, String explicitDir,
-                               String envDir, Path conventionalDir) {
+    public static Path resolve(final String explicitFile, final String explicitDir,
+                               final String envDir, final Path conventionalDir) {
         if (isSet(explicitFile)) {
-            Path f = Paths.get(explicitFile.trim());
-            if (!Files.isRegularFile(f)) {
-                throw new IllegalStateException("-D" + PROP_FILE + " aponta para algo que não é arquivo: " + f);
+            final var file = Paths.get(explicitFile.trim());
+            if (!Files.isRegularFile(file)) {
+                throw new IllegalStateException(
+                        "-D" + PROP_FILE + " aponta para algo que não é arquivo: " + file);
             }
-            return f;
+            return file;
         }
         if (isSet(explicitDir)) {
             return newestIn(Paths.get(explicitDir.trim()), "-D" + PROP_DIR);
@@ -61,14 +62,14 @@ public final class TraceLocator {
                 """);
     }
 
-    private static Path newestIn(Path dir, String origem) {
+    private static Path newestIn(final Path dir, final String origem) {
         if (!Files.isDirectory(dir)) {
             throw new IllegalStateException(origem + " não é um diretório: " + dir);
         }
         return JsonlReplayTraceSource.newestIn(dir).file();
     }
 
-    private static boolean isSet(String v) {
-        return v != null && !v.isBlank();
+    private static boolean isSet(final String value) {
+        return value != null && !value.isBlank();
     }
 }

@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SpanTest {
 
-    private static TraceEvent ev(long seq, String spanId, String parent, String comp,
-                                 String cat, String status, Double dur) {
+    private static TraceEvent ev(final long seq, final String spanId, final String parent, final String comp,
+                                 final String cat, final String status, final Double dur) {
         return new TraceEvent(seq, "r1", spanId, parent, null, dur, comp, cat, status,
                 "evt" + seq, Map.of());
     }

@@ -32,58 +32,58 @@ public final class SourceVerifier {
 
     private final Path repoRoot;
 
-    public SourceVerifier(Path repoRoot) {
+    public SourceVerifier(final Path repoRoot) {
         this.repoRoot = repoRoot == null ? null : repoRoot.toAbsolutePath().normalize();
     }
 
     public Path repoRoot() {
-        return repoRoot;
+        return this.repoRoot;
     }
 
-    public SourceVerification verify(Implementation impl) {
+    public SourceVerification verify(final Implementation impl) {
         if (impl == null || impl.isEmpty()) {
             return SourceVerification.notChecked("sem implementação declarada");
         }
-        if (repoRoot == null || !Files.isDirectory(repoRoot)) {
+        if (this.repoRoot == null || !Files.isDirectory(this.repoRoot)) {
             return SourceVerification.notChecked("repositório do pipeline não encontrado");
         }
-        Path file = repoRoot.resolve(impl.module());
+        final var file = this.repoRoot.resolve(impl.module());
         if (!Files.isRegularFile(file)) {
             return new SourceVerification(true, false, false, List.of(), impl.libraries(),
-                    "arquivo não existe em " + repoRoot);
+                    "arquivo não existe em " + this.repoRoot);
         }
-        String src;
+        final String src;
         try {
             src = Files.readString(file, StandardCharsets.UTF_8);
-        } catch (IOException e) {
+        } catch (final IOException ex) {
             return SourceVerification.notChecked("não consegui ler " + impl.module());
         }
 
-        boolean symbolFound = impl.symbol() == null || impl.symbol().isBlank()
+        final var symbolFound = impl.symbol() == null || impl.symbol().isBlank()
                 || declares(src, impl.symbol());
 
-        List<String> found = new ArrayList<>();
-        List<String> missing = new ArrayList<>();
-        for (String lib : impl.libraries()) {
+        final var found = new ArrayList<String>();
+        final var missing = new ArrayList<String>();
+        for (final var lib : impl.libraries()) {
             if (imports(src, lib)) {
                 found.add(lib);
             } else {
                 missing.add(lib);
             }
         }
-        String note = missing.isEmpty() ? "" : "declarei bibliotecas que o módulo não importa";
+        final var note = missing.isEmpty() ? "" : "declarei bibliotecas que o módulo não importa";
         return new SourceVerification(true, true, symbolFound, found, missing, note);
     }
 
     /** {@code def nome(} ou {@code class nome} em qualquer indentação. */
-    static boolean declares(String src, String symbol) {
-        String q = Pattern.quote(symbol);
+    static boolean declares(final String src, final String symbol) {
+        final var q = Pattern.quote(symbol);
         return Pattern.compile("(?m)^\\s*(def|class)\\s+" + q + "\\b").matcher(src).find();
     }
 
     /** {@code import lib}, {@code from lib import ...} ou {@code import a.lib}. */
-    static boolean imports(String src, String lib) {
-        String q = Pattern.quote(lib);
+    static boolean imports(final String src, final String lib) {
+        final var q = Pattern.quote(lib);
         return Pattern.compile("(?m)^\\s*(from\\s+" + q + "\\b|import\\s+[\\w.]*\\b" + q + "\\b)")
                 .matcher(src).find();
     }

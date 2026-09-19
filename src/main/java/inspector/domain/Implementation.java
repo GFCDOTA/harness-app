@@ -21,8 +21,7 @@ public record Implementation(
         String module,
         String symbol,
         List<String> libraries,
-        String runtime
-) {
+        String runtime) {
     public Implementation {
         libraries = libraries == null ? List.of() : List.copyOf(libraries);
     }
