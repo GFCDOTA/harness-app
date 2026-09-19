@@ -2,8 +2,8 @@
 
 > Onde estamos, agora. Quem pegar isto não deve precisar do histórico da conversa.
 
-**Atualizado:** 2026-09-19 · **Branch:** `feat/harness-master-slice1-impl` ·
-**PR:** [#1](https://github.com/GFCDOTA/harness-app/pull/1) aberta contra `develop`
+**Atualizado:** 2026-09-19 · **Branch:** `develop` ·
+**Slice 1 MERGEADO** via [PR #1](https://github.com/GFCDOTA/harness-app/pull/1) (`3e1cf06`)
 
 ---
 
@@ -21,31 +21,31 @@
 
 ## COMO RETOMAR (sessão nova começa aqui)
 
-**A PR está aberta:** [#1](https://github.com/GFCDOTA/harness-app/pull/1)
-(`feat/harness-master-slice1-impl → develop`). **Ação pendente: revisar e landar.**
+**O slice 1 está em `develop`.** Não há PR aberta e não há branch de feature viva.
+
+**Ação pendente: slice 2 — `apply_to_skp`**, em
+[`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md). É fiação: `place_layout_skp.rb` já lê
+`LAYOUT_BOXES`/`LAYOUT_OUT`. É a fatia que faz a alteração finalmente chegar no
+`.skp` — hoje o slice 1 opera um MODELO da planta, não a planta.
 
 ### Estado verificado em 2026-09-19
 
 | Item | Estado |
 |---|---|
-| working tree | limpo |
-| `feat/harness-master-slice1-impl` local × origin | idênticos, `c4b54e9` |
-| PR #1 | **OPEN** · 19 commits · 101 arquivos · `MERGEABLE` |
+| `develop` local × origin | idênticos, `3e1cf06` |
+| PR #1 | **MERGED** 16:11 UTC · 20 commits · 101 arquivos |
+| branches de feature | **nenhuma** — as 4 mergeadas foram deletadas (remote + local) |
 | CI | **não existe** — nenhum check configurado no repo |
 | suítes | 171 Java (1 falha pré-existente) · 78 Python |
+| `develop` × `main` | develop **33 commits à frente**; `main` não recebeu nada |
 
-Não abrir PR das branches intermediárias: a pilha é linear
-(`master-orchestrator` ⊂ `slice1` ⊂ `slice1-impl`) e seria revisão duplicada.
+A pilha era linear (`master-orchestrator` ⊂ `slice1` ⊂ `slice1-impl`), então a PR #1
+levou as três de uma vez.
 
-### A PR é o ponto de convergência — nada de branch nova
+### Branch nova sai de `origin/develop`
 
-```
-PR aberta → review → Codex corrige → push NA MESMA branch → PR atualiza → review final
-```
-
-Próxima fatia de código: **slice 2 (`apply_to_skp`)**, em
-[`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md). É fiação — `place_layout_skp.rb`
-já lê `LAYOUT_BOXES`/`LAYOUT_OUT`.
+Não trabalhar direto em `develop`. Para o slice 2:
+`git checkout -b feat/harness-slice2-apply-skp origin/develop`.
 
 ### ⚠️ Auth do `gh` mudou em 2026-09-19 — não voltar pro `GH_TOKEN`
 
