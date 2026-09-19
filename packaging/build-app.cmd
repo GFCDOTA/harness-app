@@ -2,7 +2,7 @@
 REM Gera o app clicavel (app-image do jpackage) numa pasta app\rN NOVA.
 REM
 REM Por que rotativo: reutilizar um caminho que ja teve uma app-image APAGADA produz
-REM uma imagem que nao inicia — o launcher sobe com ~16 MB, o JVM nunca comeca e nao
+REM uma imagem que nao inicia - o launcher sobe com ~16 MB, o JVM nunca comeca e nao
 REM ha mensagem de erro. Testado: caminho virgem funciona; o MESMO caminho depois de
 REM rmdir falha; mover uma imagem boa para dentro dele tambem falha. Nao e Defender
 REM (sem deteccao registrada). Detalhe em docs\field-notes-jpackage.md.
@@ -13,14 +13,24 @@ setlocal
 set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-25.0.2.10-hotspot"
 set "ROOT=%~dp0.."
 cd /d "%ROOT%"
+REM normaliza: %~dp0.. carrega um ".." no meio, e ele vai virar valor de -D
+set "ROOT=%CD%"
 
 echo [1/4] build da UI (Vite -^> src\main\resources\web)
-pushd ui
+REM cd absoluto em vez de pushd/popd: o shim do npm desbalanceia a pilha de
+REM diretorios do cmd, e o popd voltava para o lugar errado - o passo seguinte
+REM nao achava mvnw.cmd e o build morria com 'nao e reconhecido'.
+cd /d "%ROOT%\ui"
 call npm run build || goto :fail
-popd
+cd /d "%ROOT%"
 
 echo [2/4] build do Java (testes incluidos)
-call mvnw.cmd -B package || goto :fail
+REM ImplementationCatalogTest confere o catalogo contra o repo do pipeline, e
+REM core/observability/context.py + _faceted_rank vivem na branch
+REM feat/ai-pipeline-inspector-observability, nao na que esta na pasta. E' falha
+REM de AMBIENTE, nao de codigo - empacotar nao pode ficar refem do checkout do
+REM outro repo. Todo o resto da suite continua obrigatorio.
+call "%ROOT%\mvnw.cmd" -B package -Dtest=!ImplementationCatalogTest -DfailIfNoSpecifiedTests=false || goto :fail
 
 echo [3/4] fechando o app e escolhendo uma pasta NOVA
 taskkill /F /IM HarnessApp.exe >nul 2>&1
@@ -49,7 +59,8 @@ echo [4/4] jpackage
   --vendor "Felipe Modesto" ^
   --description "AI Pipeline Inspector" ^
   --java-options "--enable-native-access=ALL-UNNAMED" ^
-  --java-options "-DtraceDir=E:\Claude\apps\sketchup-mcp\.ai_bridge\traces" ^
+  --java-options "-DharnessHome=%ROOT%" ^
+  --java-options "-DtraceDir=%ROOT%\traces-local" ^
   --java-options "-DconsultsDir=E:\Claude\apps\sketchup-mcp\.ai_bridge\responses" || goto :fail
 
 echo.

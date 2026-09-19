@@ -35,7 +35,23 @@ public final class HarnessConfig {
         this.file = file;
     }
 
+    /**
+     * Resolve a raiz do Harness sem depender do diretório de trabalho.
+     *
+     * <p>Rodando por {@code mvnw javafx:run}, o working directory É o repo e {@code .}
+     * resolve tudo. Rodando pelo ATALHO da área de trabalho, não: o app-image do
+     * jpackage inicia noutro lugar, e {@code ./harness.json} simplesmente não existe
+     * — o capability host não subiria e a tela diria "offline" sem explicar que o
+     * motivo é o caminho, não o serviço.
+     *
+     * <p>Por isso o empacotado recebe {@code -DharnessHome=<repo>}; ver
+     * {@code packaging/build-app.cmd}.
+     */
     public static HarnessConfig load() {
+        final var home = System.getProperty("harnessHome");
+        if (home != null && !home.isBlank()) return load(Paths.get(home.trim()));
+        final var env = System.getenv("HARNESS_HOME");
+        if (env != null && !env.isBlank()) return load(Paths.get(env.trim()));
         return load(Paths.get("."));
     }
 

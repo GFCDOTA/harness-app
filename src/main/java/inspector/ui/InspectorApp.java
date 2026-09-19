@@ -84,7 +84,7 @@ public final class InspectorApp extends Application {
      * a ser configuração de UM lugar só, lida também pelo capability host em Python.
      * Duas listas de portas divergem em silêncio; uma, não.
      */
-    private final HarnessConfig config = HarnessConfig.load(Paths.get("."));
+    private final HarnessConfig config = HarnessConfig.load();
     private final ControlPlane controlPlane = new ControlPlane(this.config);
 
     private static final int HEALTH_POLL_SECONDS = 5;

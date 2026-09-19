@@ -3,7 +3,6 @@ package harness.cli;
 import harness.config.HarnessConfig;
 import harness.ui.ControlPlane;
 
-import java.nio.file.Paths;
 import java.util.Arrays;
 
 /**
@@ -33,7 +32,7 @@ public final class HarnessCli {
     }
 
     public static void main(final String[] args) {
-        final var config = HarnessConfig.load(Paths.get("."));
+        final var config = HarnessConfig.load();
         System.out.println("projeto      : " + config.project());
         System.out.println("pipeline     : " + config.pipelineRepo());
         System.out.println("modelo       : " + config.agentModel() + " @ " + config.ollamaUrl());
