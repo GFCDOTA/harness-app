@@ -2,76 +2,152 @@
 
 > Onde estamos, agora. Quem pegar isto não deve precisar do histórico da conversa.
 
-**Atualizado:** 2026-09-19 · **Branch:** `feat/master-orchestrator` (de `develop`)
+**Atualizado:** 2026-09-19 · **Branch:** `feat/harness-master-slice1`
+(docs de arquitetura, de `feat/master-orchestrator`)
 
 ---
 
-## Onde estamos
+## Mapa dos documentos
 
-O Harness deixou de ser só observabilidade do pipeline e virou o **Control Plane**
-da operação da planta. O slice 1 está entregue e **demonstrável**: um comando em
-português entra pelo Harness, o modelo local escolhe a capability, o Harness
-executa sobre a cena real da `planta_74`, os gates rodam sozinhos, o trace é
-gravado no envelope que o Inspector lê, e dá para desfazer.
+| Quer saber | Leia |
+|---|---|
+| as regras que não se quebra | [`CLAUDE.md`](CLAUDE.md) |
+| o contrato alvo | [`docs/HARNESS_MASTER_ORCHESTRATOR.md`](docs/HARNESS_MASTER_ORCHESTRATOR.md) |
+| o que existe de verdade | [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md) |
+| onde o código diverge do contrato | [`docs/review/SLICE1_ARCHITECTURAL_REVIEW.md`](docs/review/SLICE1_ARCHITECTURAL_REVIEW.md) |
+| o que implementar, em ordem | [`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md) |
+| como a decisão foi tomada | [`docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md`](docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md) |
+| histórico por fatia | [`ITERATIONS.md`](ITERATIONS.md) |
 
-A decisão arquitetural canônica e as regras que não devem ser revertidas estão em
-[`CLAUDE.md`](CLAUDE.md). O desenho e o escopo estão em
-[`docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md`](docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md).
+## CURRENT STATE
 
-## O que foi implementado
+O Harness virou o Control Plane e o slice 1 roda de ponta a ponta — **sobre o
+documento de cena**. Um comando em português entra, o modelo local escolhe a
+capability, o Harness executa, os gates rodam sozinhos, o trace é gravado no
+envelope que o Inspector lê, e dá para desfazer.
 
-**Capability plane** (`capabilities/harness_caps/`, Python, roda no venv do pipeline)
-- `config.py` — configuração central, mesmas chaves do lado Java.
-- `pipeline.py` — único ponto que importa `sketchup-mcp`; import guardado,
-  indisponibilidade **declarada** em vez de stub.
-- `scene.py` — `SceneStore`: baseline determinística + log de edições invertíveis,
-  ids estáveis (`suite_01.escrivaninha`), busca em linguagem natural, travas,
-  snapshots, undo/redo.
-- `gates.py` — circulation/overlap/geometry sobre a cena **editada**, findings
-  roteados pelo `finding_router` real (FP-033).
-- `registry.py` — **34 tools**: 22 implementadas + 12 que RECUSAM com o motivo
-  (`NOT_IMPLEMENTED`). As que recusam são registradas de propósito — ver hard
-  rule 4 no `CLAUDE.md`.
-- `host.py` — NDJSON stdin/stdout, processo filho.
+**A ressalva que muda a leitura de tudo:** nenhuma alteração chega ao `.skp`.
+`apply_to_skp` é MISSING. O `.skp` que o Felipe abre é o de 2026-08-09,
+indiferente a qualquer comando dado. O slice 1 opera um MODELO da planta, não a
+planta.
 
-**Control plane** (`src/main/java/harness/`)
-- `agent/domain/` — `ToolSpec`, `ToolCall`, `ToolResult`, `Risk`, `ToolRegistry`,
-  `AgentState`, `AgentRuntime`, `AgentOutcome`, `AgentTrace`, ports
-  `CapabilityHost` / `LlmPlanner` / `TraceRecorder`.
-- `agent/source/` — `StdioCapabilityHost`, `OllamaPlanner`, `JsonlTraceRecorder`.
-- `service/` — `ServiceManager` (status/start/startAll/restartFailed) + `ServiceRegistry`.
-- `config/HarnessConfig`, `projection/AgentProjection`, `ui/ControlPlane`,
-  `cli/HarnessCli`.
+## ARCHITECTURE
 
-**UI** — aba **Agente** com barra de comando, log, lista de ações reais, painel de
-gates com o motivo, e a tabela de capabilities (incluindo o que ainda não existe).
+Quatro estágios — `UNDERSTANDING → CAPABILITY → EXECUTION → VERIFICATION`.
+Hoje existem **dois** (entender, executar), e é daí que sai o sintoma
+`troca a cor da cama → apply_to_skp NOT_IMPLEMENTED`: `NOT_IMPLEMENTED` aparece
+como resultado de execução quando deveria ser resposta de lookup.
 
-## Contratos adicionados
+```
+UI → ControlPlane → AgentRuntime → LlmPlanner (Qwen/Ollama)
+                         ↓
+                   ToolRegistry  ← governança: risco, schema
+                         ↓
+             CapabilityHost (processo filho Python, NDJSON)
+                         ↓
+         SceneStore · gates · finding_router · sketchup-mcp (leitura)
+```
 
-| Contrato | Onde | Quem manda |
-|---|---|---|
-| Tool registry (nome, schema, risco, reversível, requisitos, timeout) | `registry.py` → `describe` | **Python** publica, Java consome |
-| Protocolo do host | NDJSON: `{id, method: ping\|describe\|invoke\|shutdown}` | ambos |
-| Documento de cena | `state-local/<projeto>.scene.json`, `schemaVersion: 2` | `scene.py` |
-| Trace do agente | envelope v1 (`TraceEvent`) — `run.started`, `agent.plan`, `tool.invoke`, `tool.rejected`, `gate.run`, `run.finished` | compartilhado com o Inspector |
-| Configuração | `harness.json` | lido pelos dois lados |
+Planos: `harness.*` = controle · `inspector.*` = observabilidade. Falam por um
+contrato só, o envelope v1, travado por `AgentTraceContractTest`.
 
-## Testes
+**Não existe serviço vivo de SketchUp** — é invocação em lote. Qualquer desenho
+que suponha o contrário está errado sobre esta máquina.
+
+## CAPABILITIES
+
+Detalhe e evidência em [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
+Placar: **11 READY · 7 PARTIAL · 21 MISSING**.
+
+**READY** — `open_project`, `get_scene`, `list_objects`, `find_object`,
+`get_object`, `undo`, `redo`, `snapshot`, `list_history`, `run_gates`,
+`get_findings`, `status` de serviço.
+
+**PARTIAL** — `move_object` (só a cena; gates só do cômodo de origem) ·
+`open_sketchup` (não verifica) · `save_project` (não grava `.skp`) ·
+`restore_last_clean` (nada marca CLEAN automaticamente) · `get_room` (sem
+polígono) · `start`/`start_all`/`restart_failed` (sem botão na UI).
+
+**MISSING** — `apply_to_skp` · `set_color`/`set_material`/`set_texture` ·
+`rotate`/`resize`/`align` · `create`/`delete`/`duplicate` ·
+`run_correction_loop` · `render`/`visual_review`/`set_camera` · RAG ·
+`close_sketchup` · `get_selection`.
+
+Três MISSING são **fiação**, não construção — a peça pesada já existe do outro
+lado: `apply_to_skp` (`place_layout_skp.rb` lê `LAYOUT_BOXES`),
+`run_correction_loop` (`run_loop()` aceita `boxes=`), `set_color`
+(`recolor_kitchen_theme.rb` prova o padrão).
+
+## CODEX QUEUE
+
+Fila completa em [`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md).
+
+```
+1.5  separar CAPABILITY de EXECUTION + verificação   ← PRIMEIRO, sem exceção
+2    apply_to_skp — a cena vira .skp
+3    service control na UI (backend pronto)
+4    materiais e cor — o pedido do Felipe
+5    agent loop com constraints
+6    visual
+```
+
+## BLOCKERS
+
+1. **B1 — a tool que recusa valida argumento antes de dizer que não existe.**
+   Reproduzido: `set_material({object_id, color})` → `INVALID_ARGUMENTS`;
+   `set_material({})` → `NOT_IMPLEMENTED`. Causa mecânica do sintoma relatado.
+2. **B2 — nenhuma capability verifica execução.** Sucesso = "o handler
+   retornou". `open_skp_in_sketchup` reporta sucesso na linha seguinte ao
+   `Popen`.
+
+Os dois caem no slice 1.5.
+
+**Atenção operacional:** `furnish_apartment.py` dá `taskkill /F /IM
+SketchUp.exe`. Qualquer slice que reuse esse caminho **mata a janela aberta do
+Felipe**. Decidir antes de implementar o slice 2.
+
+**Fora do ar:** Qdrant e GPT-Docker. Não impedem 1.5–4; impedem RAG e veredito
+visual.
+
+## DECISIONS (não reverter sem razão escrita)
+
+1. Harness é o Master Orchestrator. Claude/Codex não são dependência de runtime.
+2. O modelo não toca o sistema — só tool declarada, argumento validado.
+3. O veredito é do gate, não do texto do modelo; alteração geométrica dispara
+   gate automaticamente.
+4. **Gate verde não valida alteração inventada** — "é válido?" ≠ "foi isto que
+   pediram?".
+5. **Capability inexistente é tool REGISTRADA que recusa com motivo.** Modelo
+   escolhe tool por nome e ignora proibição em prosa — testado, ele recaiu.
+6. Nada ressuscita sozinho. Botão sim, watchdog nunca.
+7. Um envelope de trace só, compartilhado com o Inspector.
+8. Schema publicado por um lado só (Python).
+9. Risco HIGH exige confirmação humana.
+10. Capability plane em Python, onde os gates vivem; host é processo FILHO.
+
+## TEST BASELINE
 
 | Suíte | Resultado |
 |---|---|
 | Java (`./mvnw test`) | **170**, 1 falha **pré-existente** |
 | Python (`cd capabilities && python -m pytest`) | **77 passed** |
 
-Baseline antes desta iniciativa: 103 Java, mesma 1 falha.
+A falha pré-existente (`ImplementationCatalogTest`) é descasamento de **branch**
+do repo do pipeline: `core/observability/context.py` e `_faceted_rank` estão em
+`feat/ai-pipeline-inspector-observability`, não na branch que está na pasta. Não
+é regressão. Conserto real: landar a observabilidade na develop do pipeline.
 
-**A falha pré-existente não é regressão daqui.** `ImplementationCatalogTest`
-confere o catálogo contra o repo do pipeline, e `core/observability/context.py` +
-`_faceted_rank` estão na branch `feat/ai-pipeline-inspector-observability`, não na
-`feat/apartamento-mobiliado-completo` que está na pasta. Conserto real: fazer
-checkout da branch certa ou landar a observabilidade na develop do pipeline.
+Nada na suíte precisa de SketchUp, Ollama ou Python. **A fronteira entre os dois
+repos não tem cobertura nenhuma** — é onde mora a dependência de `_module_geom`.
 
-Nada na suíte precisa de SketchUp, Ollama ou Python — tudo por dublê.
+## NEXT STEP
+
+Slice 1.5. Começar por `Registry.invoke` em
+`capabilities/harness_caps/registry.py`: mover a checagem de `implemented` para
+antes da validação de schema. É o menor diff que fecha o BLOCKER B1 e o teste de
+aceitação já está escrito na fila.
+
+---
 
 ## Serviços necessários
 

@@ -120,7 +120,11 @@ correção é determinística. Prompt só para o que é preferência de estilo.
 | schema das capabilities | `capabilities/harness_caps/registry.py` (o Java só lê) |
 | estado do projeto (cena, edições, travas) | `state-local/<projeto>.scene.json` |
 | envelope de trace | `inspector.domain.TraceEvent` |
-| arquitetura alvo e escopo | `docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md` |
+| contrato alvo (tool registry, verificação, contexto) | `docs/HARNESS_MASTER_ORCHESTRATOR.md` |
+| o que existe de verdade, com evidência | `docs/CAPABILITY_MATRIX.md` |
+| onde o código diverge do contrato | `docs/review/SLICE1_ARCHITECTURAL_REVIEW.md` |
+| o que implementar, em ordem | `docs/CODEX_QUEUE.md` |
+| como a decisão foi tomada (inventário original) | `docs/HARNESS_MASTER_ORCHESTRATOR_KICKOFF.md` |
 | onde estamos agora | `HANDOFF.md` |
 | histórico por fatia | `ITERATIONS.md` |
 | gates, correction loop, RAG, pipeline | repo `sketchup-mcp` (dependência) |
