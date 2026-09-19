@@ -6,3 +6,7 @@ consults-local/
 app/
 dist/
 shots/
+state-local/
+capabilities/__pycache__/
+capabilities/**/__pycache__/
+capabilities/.pytest_cache/
