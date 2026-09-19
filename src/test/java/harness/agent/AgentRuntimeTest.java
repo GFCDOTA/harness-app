@@ -286,6 +286,32 @@ class AgentRuntimeTest {
         assertEquals(AgentOutcome.Status.UNAVAILABLE, out.status());
     }
 
+    @Test
+    void falhaDeVerificacaoNaoViraCleanNemChangedSystem() {
+        final var host = FakeCapabilityHost.standard();
+        host.replace("move_object", args -> ToolResult.success("move_object",
+                Map.of("objectId", "suite_01.escrivaninha",
+                        "roomId", "r000", "label", "Escrivaninha",
+                        "direction", "left", "distanceMm", 300.0,
+                        "partsMoved", 6,
+                        "bboxBefore", Map.of("x0", 100.0, "x1", 140.0,
+                                "y0", 200.0, "y1", 220.0, "z0", 0.0),
+                        "bboxAfter", Map.of("x0", 100.0, "x1", 140.0,
+                                "y0", 200.0, "y1", 220.0, "z0", 0.0)), 5));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 300))),
+                PlannerDecision.finalAnswer("feito"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("move a escrivaninha 30 cm para a esquerda",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.UNVERIFIED, out.status());
+        assertFalse(out.changedSystem());
+        assertFalse(host.toolNamesCalled().contains("run_gates"),
+                "gate nao valida uma execucao que nem passou pela verificacao");
+    }
+
     // -- contexto entre comandos -------------------------------------------
     @Test
     void oEstadoAprendeComOresultadoRealEalimentaOcomandoSeguinte() {

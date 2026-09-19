@@ -422,6 +422,7 @@ body {
 .ag-outcome { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   background: var(--card); display: flex; flex-direction: column; gap: 8px; }
 .ag-outcome[data-status="GATE_FAILED"] { border-color: var(--fail); }
+.ag-outcome[data-status="UNVERIFIED"] { border-color: var(--fail); }
 .ag-outcome[data-status="CLEAN"] { border-color: var(--ok); }
 .ag-outcome-head { display: flex; justify-content: space-between; align-items: center; }
 .ag-trace { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--faint); }
@@ -432,7 +433,7 @@ body {
   white-space: nowrap; font-weight: 600; }
 .b-CLEAN, .b-PASS { background: var(--ok-bg); color: var(--ok); }
 .b-WARN { background: var(--degraded-bg); color: var(--degraded); }
-.b-FAIL, .b-GATE_FAILED { background: var(--fail-bg); color: var(--fail); }
+.b-FAIL, .b-GATE_FAILED, .b-UNVERIFIED { background: var(--fail-bg); color: var(--fail); }
 .b-NEEDS_FELIPE, .b-EXHAUSTED { background: var(--degraded-bg); color: var(--degraded); }
 .b-ANSWERED { background: var(--obs-bg); color: var(--obs); }
 

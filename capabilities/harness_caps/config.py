@@ -58,6 +58,8 @@ class HarnessConfig:
     consensus_path: Path | None
     pt_to_m: str
     sketchup_exe: str
+    agent_model: str = "qwen2.5-coder:14b"
+    ollama_url: str = "http://127.0.0.1:11434"
     max_agent_attempts: int = 4
     gate_timeout_sec: int = 180
     #: risco que o host NUNCA executa sozinho — precisa de confirmação humana.
@@ -79,6 +81,8 @@ class HarnessConfig:
             "consensusPath": str(self.consensus_path) if self.consensus_path else None,
             "ptToM": self.pt_to_m,
             "sketchupExe": self.sketchup_exe,
+            "agentModel": self.agent_model,
+            "ollamaUrl": self.ollama_url,
             "maxAgentAttempts": self.max_agent_attempts,
             "confirmRisks": list(self.confirm_risks),
             "scenePath": str(self.scene_path),
@@ -110,6 +114,9 @@ def load() -> HarnessConfig:
         "HARNESS_SKETCHUP_EXE", "sketchupExe",
         r"C:\Program Files\SketchUp\SketchUp 2026\SketchUp\SketchUp.exe"))
 
+    agent_model = str(_resolve("HARNESS_AGENT_MODEL", "agentModel", "qwen2.5-coder:14b"))
+    ollama_url = str(_resolve("HARNESS_OLLAMA_URL", "ollamaUrl", "http://127.0.0.1:11434"))
+
     attempts = _resolve("HARNESS_MAX_AGENT_ATTEMPTS", "maxAgentAttempts", 4)
     try:
         attempts = int(attempts)
@@ -123,5 +130,7 @@ def load() -> HarnessConfig:
         consensus_path=consensus,
         pt_to_m=pt_to_m,
         sketchup_exe=sketchup_exe,
+        agent_model=agent_model,
+        ollama_url=ollama_url,
         max_agent_attempts=attempts,
     )

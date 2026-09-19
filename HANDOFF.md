@@ -300,3 +300,30 @@ real), **slice 4** (agent loop com constraints + correction loop), **slice 5**
 Um item transversal que paga rápido: expor `search_knowledge` /
 `search_preferences` como tools, para o agente consultar preferência aprovada
 antes de propor layout.
+# Slice 1.5 update - 2026-09-19
+
+Branch de implementacao: `feat/harness-master-slice1-impl`.
+
+Implemented:
+- Tool registry publishes `implemented`, `verification`, `outputSchema`.
+- Missing capability returns `CAPABILITY_MISSING` during lookup, before argument
+  validation. Tested case: `set_material({object_id,color})`.
+- Runtime records `capability.lookup` and `tool.verified` in trace v1.
+- `move_object` uses `STATE_DELTA` verification over `bboxBefore/bboxAfter`;
+  verification failure becomes `UNVERIFIED` and does not run gates.
+- `get_agent_info` is deterministic (`ollama`, configured model, local mode).
+- UI labels `UNVERIFIED` as "nao verificado".
+
+Tests:
+- Python capabilities: `78 passed`.
+- Java: `171` tests, `170 passed`, `1` pre-existing failure in
+  `ImplementationCatalogTest` due to `sketchup-mcp` checkout divergence
+  (`_faceted_rank`, `core/observability/context.py`, `run_scope`).
+- UI: `npm run build` OK.
+- Temporary smoke: material request returns `CAPABILITY_MISSING` without
+  execution; move 100 mm left produced `dxIn=-3.937008` in isolated scene state.
+
+Current limitation:
+- Move verification still proves the scene document, not the real `.skp`.
+  `apply_to_skp` remains the next slice; do not reuse the path with
+  `taskkill /F /IM SketchUp.exe` without a safe adapter.

@@ -13,6 +13,7 @@ import type { AgentOutcome, AgentPayload } from "./types";
 const STATUS_LABEL: Record<string, string> = {
   CLEAN: "feito",
   GATE_FAILED: "gate reprovou",
+  UNVERIFIED: "não verificado",
   ANSWERED: "respondido",
   NEEDS_FELIPE: "precisa de você",
   UNAVAILABLE: "indisponível",

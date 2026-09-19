@@ -113,6 +113,33 @@ public final class AgentTrace {
                         "errorCode", code, "errorMessage", message));
     }
 
+    public void capabilityLookup(final String spanId, final String parentSpanId, final ToolCall call,
+                                 final ToolRegistry.Admission admission) {
+        final var meta = new LinkedHashMap<String, Object>();
+        meta.put("tool", call.tool());
+        meta.put("args", call.args());
+        meta.put("verdict", admission.verdict().name());
+        if (admission.spec() != null) {
+            meta.put("implemented", admission.spec().implemented());
+            meta.put("verification", admission.spec().verification());
+            meta.put("risk", admission.spec().risk().name());
+        }
+        if (admission.code() != null) meta.put("code", admission.code());
+        if (admission.message() != null) meta.put("message", admission.message());
+        emit(spanId, parentSpanId, "capability." + call.tool(), CAT_TOOL,
+                admission.allowed() ? "ok" : "error", "capability.lookup", 0.0, meta);
+    }
+
+    public void toolVerified(final String spanId, final String parentSpanId, final ToolCall call,
+                             final boolean ok, final String strategy, final Map<String, Object> evidence) {
+        final var meta = new LinkedHashMap<String, Object>(evidence == null ? Map.of() : evidence);
+        meta.put("tool", call.tool());
+        meta.put("strategy", strategy);
+        meta.put("verified", ok);
+        emit(spanId, parentSpanId, "capability." + call.tool(), CAT_TOOL,
+                ok ? "ok" : "error", "tool.verified", 0.0, meta);
+    }
+
     public void gatesRan(final String spanId, final String parentSpanId, final String roomId,
                          final Map<String, Object> report, final double elapsedMs) {
         final var meta = new LinkedHashMap<String, Object>(report);

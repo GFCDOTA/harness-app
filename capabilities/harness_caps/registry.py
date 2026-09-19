@@ -47,6 +47,9 @@ class ToolSpec:
     description: str
     input_schema: dict
     handler: Callable[..., Any] = field(repr=False)
+    output_schema: dict = field(default_factory=dict)
+    verification: str = "NONE"
+    implemented: bool = True
     risk: str = LOW
     undoable: bool = False
     requires: tuple[str, ...] = ()
@@ -58,6 +61,9 @@ class ToolSpec:
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema,
+            "outputSchema": self.output_schema,
+            "verification": self.verification,
+            "implemented": self.implemented,
             "risk": self.risk,
             "undoable": self.undoable,
             "requires": list(self.requires),
@@ -115,6 +121,12 @@ class Registry:
                         f"capability '{name}' não existe" + (f": {reason}" if reason else ""),
                         available=sorted(self._tools))
         args = dict(args or {})
+        if not spec.implemented:
+            reason = UNSUPPORTED.get(name, "capability ainda nao implementada")
+            return _err("CAPABILITY_MISSING",
+                        f"'{name}' ainda nao existe neste sistema: {reason}",
+                        capability=name, executed=False, verified=False,
+                        changed=False, changesApplied=False)
         problem = _validate(spec.input_schema, args)
         if problem:
             return _err("INVALID_ARGUMENTS", f"{name}: {problem}",
@@ -122,7 +134,9 @@ class Registry:
         try:
             data = spec.handler(**args)
         except NotImplementedCapability as exc:
-            return _err("NOT_IMPLEMENTED", str(exc), capability=name)
+            return _err("CAPABILITY_MISSING", str(exc), capability=name,
+                        executed=False, verified=False, changed=False,
+                        changesApplied=False)
         except AmbiguousObject as exc:
             return _err("AMBIGUOUS", str(exc), candidates=exc.candidates)
         except SceneError as exc:
@@ -144,6 +158,12 @@ class Registry:
         room = {"type": "string",
                 "description": ("id do cômodo, vindo de list_rooms ou de um resultado anterior. "
                                 "NÃO invente: omita e busque na planta inteira.")}
+
+        self._add(ToolSpec(
+            "get_agent_info",
+            "Informacao deterministica sobre o agente local. Use para responder "
+            "'qual modelo esta me respondendo?' sem pedir ao LLM inventar.",
+            {"type": "object", "properties": {}}, self._agent_info))
 
         self._add(ToolSpec(
             "get_system_status",
@@ -221,7 +241,8 @@ class Registry:
                 "distance_mm": {"type": "number", "description": "distância em milímetros (positiva)"},
                 "reason": {"type": "string", "description": "por que, em uma linha"}},
              "required": ["object_id", "direction", "distance_mm"]},
-            self._move_object, risk=LOW, undoable=True, requires=("scene",), mutates=True))
+            self._move_object, verification="STATE_DELTA", risk=LOW,
+            undoable=True, requires=("scene",), mutates=True))
 
         self._add(ToolSpec(
             "run_gates",
@@ -311,9 +332,13 @@ class Registry:
                 "use-a quando o pedido for sobre isso, em vez de tentar outra.",
                 {"type": "object", "properties": {}},
                 _refuser(name, reason),
-                risk=LOW, mutates=False, timeout_sec=5))
+                implemented=False, risk=LOW, mutates=False, timeout_sec=5))
 
     # -- handlers -----------------------------------------------------------
+    def _agent_info(self) -> dict:
+        return {"provider": "ollama", "model": self.cfg.agent_model,
+                "mode": "local", "url": self.cfg.ollama_url}
+
     def _status(self) -> dict:
         avail = self.pipe.availability()
         scene = {"loaded": self.store.exists(), "path": str(self.cfg.scene_path)}

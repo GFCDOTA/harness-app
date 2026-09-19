@@ -77,15 +77,24 @@ def test_capability_ainda_nao_suportada_RECUSA_com_o_motivo(reg):
     """
     out = reg.invoke("render", {})
     assert out["ok"] is False
-    assert out["error"]["code"] == "NOT_IMPLEMENTED"
+    assert out["error"]["code"] == "CAPABILITY_MISSING"
     assert "slice 5" in out["error"]["message"]
     assert out["error"]["capability"] == "render"
+
+
+def test_capability_missing_vem_antes_de_validar_argumento(reg):
+    out = reg.invoke("set_material", {"object_id": "suite_02.cama", "color": "preto"})
+    assert out["ok"] is False
+    assert out["error"]["code"] == "CAPABILITY_MISSING"
+    assert out["error"]["executed"] is False
+    assert out["error"]["changed"] is False
 
 
 def test_a_tool_que_recusa_aparece_na_tabela_para_o_modelo_poder_escolher(reg):
     tools = {t["name"]: t for t in reg.describe()["tools"]}
     assert "set_material" in tools
     assert tools["set_material"]["description"].startswith("NÃO IMPLEMENTADO")
+    assert tools["set_material"]["implemented"] is False
     assert tools["set_material"]["mutates"] is False
 
 

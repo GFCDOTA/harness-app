@@ -33,7 +33,7 @@ final class FakeCapabilityHost implements CapabilityHost {
                         Map.of("type", "object", "properties",
                                 Map.of("query", Map.of("type", "string")),
                                 "required", List.of("query")),
-                        Risk.LOW, false, false, List.of(), 30),
+                        Map.of(), "NONE", true, Risk.LOW, false, false, List.of(), 30),
                 args -> ToolResult.success("find_object",
                         Map.of("count", 1, "unique", "suite_01.escrivaninha",
                                 "matches", List.of(Map.of("id", "suite_01.escrivaninha",
@@ -45,32 +45,45 @@ final class FakeCapabilityHost implements CapabilityHost {
                                         "direction", Map.of("type", "string"),
                                         "distance_mm", Map.of("type", "number")),
                                 "required", List.of("object_id", "direction", "distance_mm")),
-                        Risk.LOW, true, true, List.of("scene"), 30),
-                args -> ToolResult.success("move_object",
-                        Map.of("objectId", String.valueOf(args.get("object_id")),
-                                "roomId", "r000", "label", "Escrivaninha",
-                                "direction", String.valueOf(args.get("direction")),
-                                "distanceMm", args.get("distance_mm"),
-                                "partsMoved", 6), 9));
+                        Map.of(), "STATE_DELTA", true, Risk.LOW, true, true, List.of("scene"), 30),
+                args -> {
+                    final var direction = String.valueOf(args.get("direction"));
+                    final var distance = ((Number) args.get("distance_mm")).doubleValue();
+                    final var inches = distance / 25.4;
+                    final var dx = "right".equals(direction) ? inches
+                            : ("left".equals(direction) ? -inches : 0.0);
+                    final var dy = "back".equals(direction) ? inches
+                            : ("forward".equals(direction) ? -inches : 0.0);
+                    return ToolResult.success("move_object",
+                            Map.of("objectId", String.valueOf(args.get("object_id")),
+                                    "roomId", "r000", "label", "Escrivaninha",
+                                    "direction", direction,
+                                    "distanceMm", args.get("distance_mm"),
+                                    "partsMoved", 6,
+                                    "bboxBefore", Map.of("x0", 100.0, "x1", 140.0,
+                                            "y0", 200.0, "y1", 220.0, "z0", 0.0),
+                                    "bboxAfter", Map.of("x0", 100.0 + dx, "x1", 140.0 + dx,
+                                            "y0", 200.0 + dy, "y1", 220.0 + dy, "z0", 0.0)), 9);
+                });
 
         h.register(new ToolSpec("run_gates", "roda os gates",
                         Map.of("type", "object", "properties",
                                 Map.of("room_id", Map.of("type", "string")),
                                 "required", List.of("room_id")),
-                        Risk.LOW, false, false, List.of("pipeline"), 180),
+                        Map.of(), "GATE", true, Risk.LOW, false, false, List.of("pipeline"), 180),
                 args -> ToolResult.success("run_gates",
                         Map.of("roomId", args.get("room_id"), "overall", "PASS",
                                 "clean", true, "findings", List.of()), 40));
 
         h.register(new ToolSpec("undo", "desfaz", Map.of("type", "object", "properties", Map.of()),
-                        Risk.LOW, true, true, List.of("scene"), 30),
+                        Map.of(), "NONE", true, Risk.LOW, true, true, List.of("scene"), 30),
                 args -> ToolResult.success("undo", Map.of("undone", true, "remaining", 0), 3));
 
         h.register(new ToolSpec("delete_object", "apaga objeto",
                         Map.of("type", "object", "properties",
                                 Map.of("object_id", Map.of("type", "string")),
                                 "required", List.of("object_id")),
-                        Risk.HIGH, false, true, List.of("scene"), 30),
+                        Map.of(), "NONE", true, Risk.HIGH, false, true, List.of("scene"), 30),
                 args -> ToolResult.success("delete_object", Map.of("deleted", true), 5));
         return h;
     }

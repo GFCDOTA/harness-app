@@ -61,8 +61,10 @@ class AgentTraceContractTest {
 
         assertFalse(events.isEmpty(), "o recorder não escreveu nada");
         assertTrue(events.stream().allMatch(e -> "cmd_contrato".equals(e.runId())));
-        assertEquals(List.of("run.started", "agent.plan", "agent.plan", "tool.invoke",
-                        "agent.plan", "agent.plan", "tool.invoke", "gate.run",
+        assertEquals(List.of("run.started", "agent.plan", "agent.plan",
+                        "capability.lookup", "tool.invoke", "tool.verified",
+                        "agent.plan", "agent.plan",
+                        "capability.lookup", "tool.invoke", "tool.verified", "gate.run",
                         "agent.plan", "agent.plan", "run.finished"),
                 events.stream().map(e -> e.name()).toList());
     }

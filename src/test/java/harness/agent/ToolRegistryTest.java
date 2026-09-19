@@ -18,7 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ToolRegistryTest {
 
     private static ToolSpec spec(final String name, final Risk risk) {
-        return new ToolSpec(name, "d", Map.of("type", "object"), risk, false, true, List.of(), 30);
+        return new ToolSpec(name, "d", Map.of("type", "object"), Map.of(),
+                "NONE", true, risk, false, true, List.of(), 30);
     }
 
     private final ToolRegistry registry = new ToolRegistry(

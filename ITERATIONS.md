@@ -112,3 +112,33 @@ Correções, todas determinísticas onde o erro muda o projeto:
 
 **Lição de método:** prompt é pedido, não garantia. Serve para preferência de
 estilo; não serve para impedir o modelo de alterar o projeto.
+---
+
+## Slice 1.5 - Capability Lookup + Verification Contract - 2026-09-19
+
+**Objetivo:** separar `CAPABILITY` de `EXECUTION` e impedir falso sucesso quando
+uma capability ainda nao existe ou quando uma escrita nao prova o efeito.
+
+**Mudanca**
+- `ToolSpec` agora publica `implemented`, `verification` e `outputSchema` pelo
+  registry Python; o Java consome esses campos do capability host.
+- Capability publicada como `implemented=false` para no lookup com
+  `CAPABILITY_MISSING`, antes de validar schema. `set_material({object_id,color})`
+  nao vira mais `INVALID_ARGUMENTS`.
+- `AgentRuntime` grava `capability.lookup` e `tool.verified` no envelope v1.
+- `move_object` declara `STATE_DELTA`; o runtime compara `bboxBefore/bboxAfter`
+  contra direcao/distancia esperadas. Falha vira `UNVERIFIED`, nao `CLEAN`.
+- `get_agent_info` virou capability deterministica (`provider/model/mode/url`).
+- UI reconhece `UNVERIFIED` como "nao verificado".
+
+**Testes:** Python 78 passed. Java 171 testes: 170 passed + 1 falha preexistente
+em `ImplementationCatalogTest` por descasamento do repo `sketchup-mcp`
+(`_faceted_rank`, `core/observability/context.py`, `run_scope`).
+
+**Smoke manual:** registry Python com cena temporaria: `get_agent_info` ok,
+`set_material(object_id,color)` -> `CAPABILITY_MISSING` com `executed=false`,
+`move_object(left,100mm)` gerou delta `dxIn=-3.937008` e history com 1 edicao.
+
+**Limitacao:** a verificacao de `move_object` ainda prova a cena editada, nao o
+`.skp` aberto no SketchUp. Materializar em `.skp` continua sendo Slice 2
+(`apply_to_skp`) e deve evitar o caminho com `taskkill /F /IM SketchUp.exe`.

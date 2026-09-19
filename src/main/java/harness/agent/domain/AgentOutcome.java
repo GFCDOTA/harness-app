@@ -24,6 +24,8 @@ public record AgentOutcome(
         CLEAN,
         /** Executou, mas um gate determinístico reprovou. */
         GATE_FAILED,
+        /** Executou, mas o Harness nao conseguiu provar o efeito esperado. */
+        UNVERIFIED,
         /** Nada mudou: era leitura, pergunta ou consulta. */
         ANSWERED,
         /** Precisa de uma decisão do Felipe (ambiguidade, risco HIGH, ou sem saída). */

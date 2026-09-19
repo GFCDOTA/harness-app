@@ -114,6 +114,7 @@ public final class AgentRuntime {
                 case CALL_TOOLS -> {
                     for (final var call : decision.calls()) {
                         final var admission = this.registry.admit(call, this.autoApproveHigh);
+                        trace.capabilityLookup(trace.newSpan(), planSpan, call, admission);
                         if (admission.verdict() == ToolRegistry.Admission.Verdict.NEEDS_CONFIRMATION) {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     admission.code(), admission.message());
@@ -147,9 +148,23 @@ public final class AgentRuntime {
 
                         final var result = this.host.invoke(call);
                         trace.toolCalled(trace.newSpan(), planSpan, call, result);
-                        this.state.observe(result);
                         history.add(new LlmPlanner.Step(call, result));
-                        actions.add(action(call, result, admission.spec().mutates()));
+                        if (result.ok()) {
+                            final var verification = verify(call, result, admission.spec());
+                            trace.toolVerified(trace.newSpan(), planSpan, call, verification.ok(),
+                                    admission.spec().verification(), verification.evidence());
+                            if (!verification.ok()) {
+                                final var failed = ToolResult.failure(call.tool(), "VERIFICATION_FAILED",
+                                        verification.message(), verification.evidence(), result.elapsedMs());
+                                actions.add(action(call, failed, false));
+                                return finish(trace, startedAt, AgentOutcome.Status.UNVERIFIED,
+                                        verification.message(), actions, gateResults, List.of(), command);
+                            }
+                            this.state.observe(result);
+                            actions.add(action(call, result, admission.spec().mutates()));
+                        } else {
+                            actions.add(action(call, result, admission.spec().mutates()));
+                        }
 
                         if (result.ok() && touchesGeometry(call.tool())) {
                             final var report = runGates(trace, planSpan, result, history);
@@ -196,6 +211,95 @@ public final class AgentRuntime {
 
     private static boolean touchesGeometry(final String tool) {
         return GEOMETRY_TOOLS.contains(tool);
+    }
+
+    private record Verification(boolean ok, String message, Map<String, Object> evidence) {
+        static Verification ok(final Map<String, Object> evidence) {
+            return new Verification(true, "verificacao passou", evidence);
+        }
+
+        static Verification fail(final String message, final Map<String, Object> evidence) {
+            return new Verification(false, message, evidence);
+        }
+    }
+
+    private static Verification verify(final ToolCall call, final ToolResult result, final ToolSpec spec) {
+        final var strategy = spec.verification();
+        if (strategy == null || strategy.isBlank() || "NONE".equals(strategy)) {
+            return Verification.ok(Map.of("strategy", "NONE"));
+        }
+        if ("GATE".equals(strategy)) {
+            return Verification.ok(Map.of("strategy", "GATE", "overall",
+                    String.valueOf(result.data().getOrDefault("overall", "UNKNOWN"))));
+        }
+        if ("STATE_DELTA".equals(strategy) && "move_object".equals(call.tool())) {
+            return verifyMoveDelta(call, result);
+        }
+        return Verification.fail("estrategia de verificacao sem verificador: " + strategy,
+                Map.of("strategy", strategy));
+    }
+
+    private static Verification verifyMoveDelta(final ToolCall call, final ToolResult result) {
+        final var before = asMap(result.data().get("bboxBefore"));
+        final var after = asMap(result.data().get("bboxAfter"));
+        final var direction = String.valueOf(result.data().getOrDefault("direction",
+                call.args().getOrDefault("direction", ""))).toLowerCase();
+        final var distance = number(result.data(), "distanceMm",
+                number(call.args(), "distance_mm", Double.NaN));
+        if (before == null || after == null || Double.isNaN(distance)) {
+            return Verification.fail("move_object nao devolveu bboxBefore/bboxAfter verificavel",
+                    Map.of("hasBefore", before != null, "hasAfter", after != null));
+        }
+        final var expected = distance / 25.4;
+        final var dx = switch (direction) {
+            case "left", "esquerda", "west" -> -expected;
+            case "right", "direita", "east" -> expected;
+            default -> 0.0;
+        };
+        final var dy = switch (direction) {
+            case "up", "north", "cima", "tras", "back" -> expected;
+            case "forward", "frente", "down", "south", "baixo" -> -expected;
+            default -> 0.0;
+        };
+        final var dz = switch (direction) {
+            case "raise" -> expected;
+            case "lower" -> -expected;
+            default -> 0.0;
+        };
+        final var evidence = new LinkedHashMap<String, Object>();
+        evidence.put("direction", direction);
+        evidence.put("distanceMm", distance);
+        evidence.put("expectedDxIn", dx);
+        evidence.put("expectedDyIn", dy);
+        evidence.put("expectedDzIn", dz);
+        evidence.put("before", before);
+        evidence.put("after", after);
+        final var ok = moved(before, after, "x0", dx)
+                && moved(before, after, "x1", dx)
+                && moved(before, after, "y0", dy)
+                && moved(before, after, "y1", dy)
+                && moved(before, after, "z0", dz);
+        return ok
+                ? Verification.ok(evidence)
+                : Verification.fail("move_object executou, mas o delta verificado nao bate", evidence);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(final Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+    }
+
+    private static double number(final Map<String, Object> map, final String key, final double fallback) {
+        final var value = map.get(key);
+        return value instanceof Number number ? number.doubleValue() : fallback;
+    }
+
+    private static boolean moved(final Map<String, Object> before, final Map<String, Object> after,
+                                 final String key, final double expectedDelta) {
+        final var a = number(after, key, Double.NaN);
+        final var b = number(before, key, Double.NaN);
+        if (Double.isNaN(a) || Double.isNaN(b)) return true;
+        return Math.abs((a - b) - expectedDelta) <= 0.02;
     }
 
     /** Tools cujo efeito depende de uma MEDIDA que só o usuário pode ter dado. */
@@ -305,7 +409,7 @@ public final class AgentRuntime {
     private static String traceStatus(final AgentOutcome.Status status) {
         return switch (status) {
             case CLEAN, ANSWERED -> "ok";
-            case GATE_FAILED -> "error";
+            case GATE_FAILED, UNVERIFIED -> "error";
             case UNAVAILABLE -> "skipped";
             default -> "degraded";
         };

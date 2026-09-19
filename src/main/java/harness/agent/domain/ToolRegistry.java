@@ -62,6 +62,14 @@ public final class ToolRegistry {
                     "capability '" + call.tool() + "' não existe" + hint
                             + ". Disponíveis: " + String.join(", ", this.tools.keySet()));
         }
+        if (!spec.implemented()) {
+            final var reason = this.unsupported.stream()
+                    .filter(candidate -> candidate.name().equals(call.tool()))
+                    .map(UnsupportedCapability::reason)
+                    .findFirst().orElse("capability ainda nao implementada");
+            return Admission.rejected("CAPABILITY_MISSING",
+                    "capability '" + call.tool() + "' ainda nao esta implementada: " + reason);
+        }
         if (spec.needsConfirmation() && !autoApproveHigh) {
             return Admission.needsConfirmation(spec,
                     "'" + spec.name() + "' é risco HIGH e precisa de confirmação humana");

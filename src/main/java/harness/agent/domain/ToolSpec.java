@@ -17,6 +17,9 @@ public record ToolSpec(
         String name,
         String description,
         Map<String, Object> inputSchema,
+        Map<String, Object> outputSchema,
+        String verification,
+        boolean implemented,
         Risk risk,
         boolean undoable,
         boolean mutates,
@@ -26,6 +29,8 @@ public record ToolSpec(
     public ToolSpec {
         if (name == null || name.isBlank()) throw new IllegalArgumentException("tool sem nome");
         inputSchema = inputSchema == null ? Map.of() : Map.copyOf(inputSchema);
+        outputSchema = outputSchema == null ? Map.of() : Map.copyOf(outputSchema);
+        if (verification == null || verification.isBlank()) verification = "NONE";
         requires = requires == null ? List.of() : List.copyOf(requires);
         if (risk == null) risk = Risk.LOW;
     }
