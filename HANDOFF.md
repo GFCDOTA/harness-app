@@ -2,8 +2,8 @@
 
 > Onde estamos, agora. Quem pegar isto não deve precisar do histórico da conversa.
 
-**Atualizado:** 2026-09-19 · **Branch:** `feat/harness-master-slice1`
-(docs de arquitetura, de `feat/master-orchestrator`)
+**Atualizado:** 2026-09-19 · **Branch:** `feat/harness-master-slice1-impl` ·
+**PR:** [#1](https://github.com/GFCDOTA/harness-app/pull/1) aberta contra `develop`
 
 ---
 
@@ -21,59 +21,23 @@
 
 ## COMO RETOMAR (sessão nova começa aqui)
 
-**Ação pendente, única:** abrir UMA pull request. Nada mais está em aberto.
-
-```
-base:    develop
-compare: feat/harness-master-slice1-impl
-```
+**A PR está aberta:** [#1](https://github.com/GFCDOTA/harness-app/pull/1)
+(`feat/harness-master-slice1-impl → develop`). **Ação pendente: revisar e landar.**
 
 ### Estado verificado em 2026-09-19
 
 | Item | Estado |
 |---|---|
 | working tree | limpo |
-| `feat/harness-master-slice1-impl` local × origin | idênticos, `e687438` |
-| commits sobre `develop` | 18 (zero atrás) |
-| PRs abertas no repo | **0** — `createPullRequest` ainda 403 (re-testado 2026-09-19) |
+| `feat/harness-master-slice1-impl` local × origin | idênticos, `c4b54e9` |
+| PR #1 | **OPEN** · 19 commits · 101 arquivos · `MERGEABLE` |
+| CI | **não existe** — nenhum check configurado no repo |
 | suítes | 171 Java (1 falha pré-existente) · 78 Python |
 
-### O que bloqueia
+Não abrir PR das branches intermediárias: a pilha é linear
+(`master-orchestrator` ⊂ `slice1` ⊂ `slice1-impl`) e seria revisão duplicada.
 
-O PAT fine-grained tem `pull_requests=read`; criar PR exige **write**.
-`createPullRequest` devolve `403 Resource not accessible`.
-
-Corrigir em **https://github.com/settings/personal-access-tokens** →
-o token em uso → `Repository permissions` → **Pull requests: Read and write**.
-Se ficar *Pending*, aprovar em
-**https://github.com/organizations/GFCDOTA/settings/personal-access-token-requests**.
-
-Editar permissão **não muda o valor do token** — não refazer `setx`.
-
-### ⚠️ Ler o token do REGISTRO, não do ambiente do processo
-
-`setx` grava no registro mas **não atualiza processos já rodando**. Um shell que
-nasceu antes da troca continua com o token velho e o diagnóstico sai errado.
-
-```powershell
-$env:GH_TOKEN = [Environment]::GetEnvironmentVariable('GH_TOKEN','User')
-& 'C:\Program Files\GitHub CLI\gh.exe' api repos/GFCDOTA/harness-app/pulls --jq 'length'
-```
-
-### Sequência exata
-
-1. `git fetch origin` e conferir que `origin/feat/harness-master-slice1-impl`
-   está em `e687438` (ou mais à frente, se o Codex empurrou) e que o working
-   tree está limpo.
-2. Ler o token do registro (acima) e provar ESCRITA antes de tentar a PR.
-3. Criar **UMA** PR: `feat/harness-master-slice1-impl → develop`.
-4. **Não** abrir PR das branches intermediárias — a pilha é linear
-   (`master-orchestrator` ⊂ `slice1` ⊂ `slice1-impl`) e seria revisão duplicada.
-5. **Não** fazer merge.
-
-### Depois que a PR abrir
-
-A PR vira o ponto de convergência dos dois agentes. Nada de branch nova:
+### A PR é o ponto de convergência — nada de branch nova
 
 ```
 PR aberta → review → Codex corrige → push NA MESMA branch → PR atualiza → review final
@@ -83,10 +47,36 @@ Próxima fatia de código: **slice 2 (`apply_to_skp`)**, em
 [`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md). É fiação — `place_layout_skp.rb`
 já lê `LAYOUT_BOXES`/`LAYOUT_OUT`.
 
+### ⚠️ Auth do `gh` mudou em 2026-09-19 — não voltar pro `GH_TOKEN`
+
+Agora é **keyring** (`gh auth login`, device flow). Token `gho_*`, scopes
+`gist, read:org, repo, workflow`. `GH_TOKEN` foi **apagado** do registro do usuário.
+
+**`GH_TOKEN` tem precedência sobre o keyring.** Se ela reaparecer, o `gh auth login`
+roda mas o gh segue usando o valor velho. E processo que nasceu antes da limpeza
+**ainda carrega a variável** — numa sessão do Claude Code é preciso
+`Remove-Item Env:GH_TOKEN` antes de chamar o gh.
+
+O que custou várias sessões, para não re-descobrir:
+
+- O PAT fine-grained em uso tinha **resource owner = conta pessoal**
+  (`fmodesto30`), e os repos são da **org GFCDOTA**. Fine-grained só alcança
+  recursos do próprio owner → o token não tinha acesso a repo nenhum, e a página
+  dele **nem mostra** dropdown de Pull requests pra consertar. Mexer em permissão
+  ali nunca ia funcionar.
+- **`git push` mascarou tudo**: push não lê `GH_TOKEN`, vai por
+  `credential.helper=manager` (Windows Credential Manager). "Push funciona mas PR
+  dá 403" parecia permissão de PR faltando; o token estava vazio.
+- Repo **público** responde leitura a qualquer token. `gh api repos/...` retornar
+  dados **não prova** que o token serve. Probe honesto de PR-write = tentar criar.
+
+Detalhe completo na skill `gh-autopilot` do `sketchup-mcp`.
+
 ### Higiene pendente
 
-Um PAT foi colado em texto puro no chat desta sessão (o de lifetime longo, que a
-org recusou). **Revogar**, se ainda existir.
+PATs antigos em **https://github.com/settings/personal-access-tokens** — incluindo
+o token `claude` (vazio, sem uso) e o que foi **colado em texto puro no chat**.
+**Revogar todos**, já que a auth agora é pelo keyring.
 
 ---
 
