@@ -33,9 +33,9 @@ compare: feat/harness-master-slice1-impl
 | Item | Estado |
 |---|---|
 | working tree | limpo |
-| `feat/harness-master-slice1-impl` local × origin | idênticos, `d131c46` |
-| commits sobre `develop` | 17 |
-| PRs abertas no repo | **0** |
+| `feat/harness-master-slice1-impl` local × origin | idênticos, `e687438` |
+| commits sobre `develop` | 18 (zero atrás) |
+| PRs abertas no repo | **0** — `createPullRequest` ainda 403 (re-testado 2026-09-19) |
 | suítes | 171 Java (1 falha pré-existente) · 78 Python |
 
 ### O que bloqueia
@@ -63,7 +63,7 @@ $env:GH_TOKEN = [Environment]::GetEnvironmentVariable('GH_TOKEN','User')
 ### Sequência exata
 
 1. `git fetch origin` e conferir que `origin/feat/harness-master-slice1-impl`
-   está em `d131c46` (ou mais à frente, se o Codex empurrou) e que o working
+   está em `e687438` (ou mais à frente, se o Codex empurrou) e que o working
    tree está limpo.
 2. Ler o token do registro (acima) e provar ESCRITA antes de tentar a PR.
 3. Criar **UMA** PR: `feat/harness-master-slice1-impl → develop`.
