@@ -29,7 +29,7 @@ A decisão arquitetural canônica e as regras que não devem ser revertidas est�
   snapshots, undo/redo.
 - `gates.py` — circulation/overlap/geometry sobre a cena **editada**, findings
   roteados pelo `finding_router` real (FP-033).
-- `registry.py` — 20 capabilities tipadas + 12 declaradas `unsupported` com motivo.
+- `registry.py` — 22 capabilities tipadas + 12 declaradas `unsupported` com motivo.
 - `host.py` — NDJSON stdin/stdout, processo filho.
 
 **Control plane** (`src/main/java/harness/`)
@@ -59,7 +59,7 @@ gates com o motivo, e a tabela de capabilities (incluindo o que ainda não exist
 | Suíte | Resultado |
 |---|---|
 | Java (`./mvnw test`) | **165**, 1 falha **pré-existente** |
-| Python (`cd capabilities && python -m pytest`) | **68 passed** |
+| Python (`cd capabilities && python -m pytest`) | **75 passed** |
 
 Baseline antes desta iniciativa: 103 Java, mesma 1 falha.
 
@@ -145,6 +145,9 @@ FAIL não nasceu dele. Isso é um achado sobre a planta, não sobre o agente.
 
 ## O que ainda NÃO funciona
 
+0. **Reiniciar o app depois de mexer no registry.** A tabela de capabilities é
+   lida UMA vez, quando o capability host sobe. Capability nova só aparece na
+   próxima abertura da janela.
 1. **A cena editada não vira `.skp`.** Materializar exige rodar o SketchUp em
    lote. Declarado como `apply_to_skp` em `unsupported`.
 2. **Sem render, visual judge, contact sheet, câmera** no registry (slice 5).

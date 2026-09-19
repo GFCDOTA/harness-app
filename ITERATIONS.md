@@ -62,3 +62,26 @@ Cada um tem teste de regressão.
 **Achado sobre o projeto, não sobre o código:** a `SUITE 01` já reprova circulação
 na baseline — um portal PRIMARY com 1,00 m livre vazio vai a 0,00 m com a mobília
 atual. Apareceu porque o Harness passou a medir; vale decidir o que fazer.
+
+### Delta — uso real do Felipe, mesma sessão
+
+Ele abriu o app e escreveu **"abra a ultima planta feita do sketchup"**. Duas
+coisas apareceram, as duas reais:
+
+1. **Não existia capability para isso.** O modelo improvisou `restore_last_clean`
+   (que recusou corretamente, dizendo que nenhuma versão CLEAN foi marcada) e
+   depois `open_project` — que carrega o documento de cena, não abre o arquivo no
+   SketchUp. Pedido legítimo, buraco real no registry.
+2. **O desfecho apareceu como VALIDADO.** `open_project` muta e nenhum gate
+   rodou, então `CLEAN` estava certo; o **rótulo** é que afirmava o que ninguém
+   verificou. Numa ferramenta cuja regra é "o veredito vem do gate", isso é
+   grave. Agora `CLEAN` só lê "validado" quando um gate rodou; sem gate, "feito".
+
+**Adicionado:** `list_skp_artifacts` e `open_skp_in_sketchup`. Ordena por data de
+escrita, nunca por nome — arquivo com sufixo de tema ordena antes do canônico em
+ordem alfabética. `scene.skp` fica de fora por regra do projeto, e ele é
+justamente o mais recente: ordenar por data sem excluir erraria toda vez.
+
+**Lição de processo:** a primeira coisa que ele pediu ao produto não estava no
+registry. Vale olhar o que ele tenta e não consegue antes de escolher a próxima
+fatia pela lista do plano.
