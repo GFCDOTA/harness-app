@@ -367,6 +367,67 @@ class AgentRuntimeTest {
         assertFalse(out.changedSystem());
     }
 
+    // -- slice 4: cor ------------------------------------------------------
+    /** `set_color` como o Python o publica: STATE_DELTA sobre o rgb. */
+    private static FakeCapabilityHost hostComSetColor(final Object rgbAfter) {
+        final var host = FakeCapabilityHost.standard();
+        host.register(new ToolSpec("set_color", "troca a cor de um objeto",
+                        Map.of("type", "object", "properties",
+                                Map.of("object_id", Map.of("type", "string"),
+                                        "color", Map.of("type", "string")),
+                                "required", List.of("object_id", "color")),
+                        Map.of(), "STATE_DELTA", true, Risk.MEDIUM, true, true,
+                        List.of("scene"), 30),
+                args -> ToolResult.success("set_color",
+                        Map.of("objectId", String.valueOf(args.get("object_id")),
+                                "roomId", "r000", "label", "Cama",
+                                "color", String.valueOf(args.get("color")),
+                                "rgbBefore", List.of(200, 200, 200),
+                                "rgbAfter", rgbAfter,
+                                "partsPainted", 2,
+                                "gatesRun", false), 7));
+        return host;
+    }
+
+    private static ToolCall pintar() {
+        return new ToolCall("set_color", Map.of("object_id", "suite_01.cama",
+                "color", "preto"));
+    }
+
+    @Test
+    void trocarCorDeixaOcomandoCleanSemRodarGateDeGeometria() {
+        final var host = hostComSetColor(List.of(26, 26, 28));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintar())),
+                PlannerDecision.finalAnswer("pintado"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("troca a cor da cama para preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+        assertTrue(out.changedSystem());
+        assertFalse(host.toolNamesCalled().contains("run_gates"),
+                "cor nao move nada: rodar gate de geometria aqui seria teatro");
+    }
+
+    @Test
+    void handlerQueDizTerPintadoMasNaoMudouOrgbViraUnverified() {
+        // O caso que o CODEX_QUEUE pede explicitamente: "verification pega um
+        // handler que diz ter mudado e nao mudou".
+        final var host = hostComSetColor(List.of(200, 200, 200));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintar())),
+                PlannerDecision.finalAnswer("pintado"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("troca a cor da cama para preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.UNVERIFIED, out.status());
+        assertFalse(out.changedSystem());
+    }
+
     // -- contexto entre comandos -------------------------------------------
     @Test
     void oEstadoAprendeComOresultadoRealEalimentaOcomandoSeguinte() {

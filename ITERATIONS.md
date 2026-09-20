@@ -188,3 +188,51 @@ Nota: a falha preexistente em `ImplementationCatalogTest`, registrada no slice
 fiacao e a honestidade do resultado, mas NAO prova que o `place_layout_skp.rb`
 aceita estes boxes e produz um `.skp` abrivel. So fecha rodando o SketchUp de
 verdade, e o veredito e VISUAL — do Felipe. Registrado no `CODEX_QUEUE.md`.
+
+---
+
+## Slice 4 — `set_color`: o pedido que originou o projeto (2026-09-20)
+
+**Problema:** "troca a cor da cama para preto" era o comando que motivou o
+Harness inteiro, e ate hoje devolvia `set_material -> NOT_IMPLEMENTED`.
+
+**Mudanca**
+- `colors.py` — tabela FECHADA de 27 cores + sinonimos em ingles. Nome fora da
+  tabela RECUSA com a lista; nunca chuta um RGB plausivel.
+- `SceneStore.recolor` + op `recolor` no `_apply`. Mesma fila do `translate`,
+  entao undo/redo saem de graca e `unmaterializedEdits` conta cor junto com
+  movimento — cor tambem precisa de `apply_to_skp` para chegar no arquivo.
+- Tool `set_color`: `STATE_DELTA`, `risk=MEDIUM`, `undoable=true`, `mutates=true`.
+- `verifyColorDelta` no Java: `STATE_DELTA` estava amarrado a `move_object`, e
+  `set_color` cairia no fail-closed. Handler que diz ter pintado e nao mudou o
+  `rgb` vira UNVERIFIED — o caso que o CODEX_QUEUE pedia explicitamente.
+
+**A armadilha que quase fez a fatia ser falsa**
+
+`place_layout_skp.rb:44` faz `m = model.materials[name]; return m if m`. Material
+e reusado **pelo NOME** e o `rgb` de quem chega depois e **IGNORADO**. Trocar a
+cor mantendo o `ph_<kind>` compartilhado produziria um `.skp` visualmente
+identico — e todos os testes de cena passariam. Descoberto lendo o builder ANTES
+de escrever o handler, nao depois.
+
+Solucao: `mat_name` proprio por objeto+cor (`harness_<objectId>_<hex>`),
+deterministico e estavel (repintar da mesma cor da o mesmo nome) e disjunto entre
+objetos (duas pecas pretas nao colidem). Ha teste para cada uma dessas tres
+propriedades, e um teste de costura que le o `LAYOUT_BOXES` que o builder
+receberia e confere rgb + mat_name.
+
+**Decisao sobre o enum do schema**
+
+O enum lista canonicos E sinonimos. So os canonicos faria o schema rejeitar
+`black` — alias valido — e a tabela de sinonimos viraria peso morto. Com o enum
+completo, cor inventada para em `INVALID_ARGUMENTS` antes de tocar na cena, e o
+erro carrega o enum: o modelo se corrige sozinho. `UnknownColor` continua no
+handler como defesa em profundidade, com teste provando que nao e codigo morto.
+
+**Gate de geometria NAO roda** para cor — cor nao move nada. `gatesRun: false`
+sai explicito no resultado, em vez de omitir e deixar parecer que rodou.
+
+**Testes:** Python 109 passed (17 novos). Java 175 passed, 0 falhas (2 novos).
+
+**Limitacao declarada:** como no slice 2, tudo e duble. Nenhum `.skp` real foi
+gerado. O fechamento honesto e abrir o arquivo e olhar — veredito do Felipe.

@@ -2,8 +2,8 @@
 
 > Onde estamos, agora. Quem pegar isto não deve precisar do histórico da conversa.
 
-**Atualizado:** 2026-09-19 · **Branch:** `develop` ·
-**Slice 1 MERGEADO** via [PR #1](https://github.com/GFCDOTA/harness-app/pull/1) (`3e1cf06`)
+**Atualizado:** 2026-09-20 · **Branch:** `develop` ·
+**Slices 1, 2 e 4 em `develop`** — o comando do Felipe chega no `.skp`, cor inclusive
 
 ---
 
@@ -21,27 +21,37 @@
 
 ## COMO RETOMAR (sessão nova começa aqui)
 
-**Slices 1 e 2 estão em `develop`.** A edição do Felipe agora **chega no `.skp`**.
+**Slices 1, 2 e 4 estão em `develop`.** O pedido que originou o projeto —
+*"troca a cor da cama para preto"* — **funciona de ponta a ponta**: o comando
+pinta a cena, `apply_to_skp` materializa, e a cor aparece no arquivo.
 
-**Ação pendente: slice 3 ou slice 4**, em [`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md):
+**Ação pendente: slice 3 ou slice 5**, em [`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md):
 
 - **Slice 3 — service control na UI.** Menor da fila; o backend
-  (`ServiceManager`, 13 testes) já está pronto e testado, falta só o botão.
-- **Slice 4 — `set_color`.** É o **pedido original do Felipe** ("troca a cor da
-  cama para preto") e só agora faz sentido: com o slice 2 no lugar, a cor vira
-  visível no `.skp` em vez de morrer na cena.
+  (`ServiceManager`, 13 testes) já está pronto, falta só o botão.
+- **Slice 5 — agent loop com constraints** (*"melhora a circulação desse quarto
+  sem mexer na cama"*). Também é fiação: `correction_loop.run_loop()` já aceita
+  `boxes=`, `room_poly=` e `detect=` injetável.
 
-Recomendação: **slice 4**. O 3 é conveniência; o 4 fecha o pedido que originou
-o projeto inteiro.
+Recomendação: **slice 5** — é o último item da lista de "fiação, não construção"
+e fecha o `run_correction_loop`, a única capability represada que sobrou.
 
 ### Estado verificado em 2026-09-20
 
 | Item | Estado |
 |---|---|
-| slice 2 | **entregue** — `apply_to_skp` READY |
-| suítes | **173 Java · 93 Python**, zero falhas nas duas |
+| slices entregues | 1, 1.5, 2 e 4 |
+| suítes | **175 Java · 109 Python**, zero falhas nas duas |
 | CI | **não existe** — nenhum check configurado no repo |
-| placar de capabilities | 12 READY · 7 PARTIAL · 20 MISSING |
+| placar de capabilities | 13 READY · 7 PARTIAL · 19 MISSING |
+
+### ⚠️ Dívida que atravessa as duas fatias novas
+
+Tudo está coberto por **dublês**. Isso prova a fiação e a honestidade dos
+resultados, mas **nenhum `.skp` real foi gerado nesta sessão**. Falta o teste de
+integração que roda o SketchUp de verdade — e o veredito dele é VISUAL, do
+Felipe. Quando houver janela para isso: `set_color` na cama → `apply_to_skp` →
+abrir o arquivo → a cama está preta?
 
 ### O que o slice 2 decidiu, e não se reabre sem motivo escrito
 
@@ -55,8 +65,8 @@ o projeto inteiro.
 
 ### Branch nova sai de `origin/develop`
 
-Não trabalhar direto em `develop`. Para o slice 4:
-`git checkout -b feat/harness-slice4-set-color origin/develop`.
+Não trabalhar direto em `develop`. Para o slice 5:
+`git checkout -b feat/harness-slice5-correction-loop origin/develop`.
 
 ### ⚠️ Auth do `gh` mudou em 2026-09-19 — não voltar pro `GH_TOKEN`
 
@@ -111,9 +121,13 @@ diz se o arquivo está em dia com a cena.
 ## ARCHITECTURE
 
 Quatro estágios — `UNDERSTANDING → CAPABILITY → EXECUTION → VERIFICATION`.
-Hoje existem **dois** (entender, executar), e é daí que sai o sintoma
-`troca a cor da cama → apply_to_skp NOT_IMPLEMENTED`: `NOT_IMPLEMENTED` aparece
-como resultado de execução quando deveria ser resposta de lookup.
+Os quatro existem desde o slice 1.5: `NOT_IMPLEMENTED` virou resposta de
+**lookup** (antes de validar argumento ou chamar handler), e toda tool declara
+como provar que executou (`STATE_DELTA`, `ARTIFACT`, `GATE`, `NONE`).
+
+O sintoma que originou isso — `troca a cor da cama → set_material
+NOT_IMPLEMENTED` — está **resolvido**: hoje a capability certa é `set_color`, e
+ela existe. `set_material` (textura) segue recusando, mas apontando o caminho.
 
 ```
 UI → ControlPlane → AgentRuntime → LlmPlanner (Qwen/Ollama)
@@ -134,21 +148,23 @@ que suponha o contrário está errado sobre esta máquina.
 ## CAPABILITIES
 
 Detalhe e evidência em [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
-Placar: **12 READY · 7 PARTIAL · 20 MISSING**.
+Placar: **13 READY · 7 PARTIAL · 19 MISSING**.
 
 **READY** — `open_project`, `get_scene`, `list_objects`, `find_object`,
 `get_object`, `undo`, `redo`, `snapshot`, `list_history`, `run_gates`,
-`get_findings`, `status` de serviço.
+`get_findings`, `status` de serviço, **`apply_to_skp`** (slice 2) e
+**`set_color`** (slice 4).
 
 **PARTIAL** — `move_object` (só a cena; gates só do cômodo de origem) ·
 `open_sketchup` (não verifica) · `save_project` (não grava `.skp`) ·
 `restore_last_clean` (nada marca CLEAN automaticamente) · `get_room` (sem
 polígono) · `start`/`start_all`/`restart_failed` (sem botão na UI).
 
-**MISSING** — `apply_to_skp` · `set_color`/`set_material`/`set_texture` ·
-`rotate`/`resize`/`align` · `create`/`delete`/`duplicate` ·
-`run_correction_loop` · `render`/`visual_review`/`set_camera` · RAG ·
-`close_sketchup` · `get_selection`.
+**MISSING** — `set_material`/`set_texture` (textura ≠ cor; precisa de PNG por
+kind) · `rotate`/`resize`/`align` · `create`/`delete`/`duplicate` ·
+**`run_correction_loop`** (a última que é só fiação) ·
+`render`/`visual_review`/`set_camera` · RAG · `close_sketchup` ·
+`get_selection`.
 
 Três MISSING são **fiação**, não construção — a peça pesada já existe do outro
 lado: `apply_to_skp` (`place_layout_skp.rb` lê `LAYOUT_BOXES`),
