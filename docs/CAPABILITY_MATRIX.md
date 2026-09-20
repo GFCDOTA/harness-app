@@ -21,13 +21,19 @@ lançado. Hoje a resposta honesta é quase sempre *não* — ver
 
 ---
 
-## ⚠️ Ressalva que atravessa a matriz inteira
+## ⚠️ Ressalva que atravessa a matriz inteira — RESOLVIDA no slice 2
 
-**Toda capability de escrita opera o documento de cena
-(`state-local/planta_74.scene.json`), não o `.skp`.** Não existe hoje caminho de
-escrita até o modelo do SketchUp: `apply_to_skp` é MISSING. Ler a coluna
-"efeito" com isso em mente — "move a cama" move a cama *na cena*, e o `.skp` que
-o Felipe abre continua o de 2026-08-09.
+Até 2026-09-20 valia: *"toda capability de escrita opera o documento de cena, não
+o `.skp`; `apply_to_skp` é MISSING, e o arquivo que o Felipe abre continua o de
+2026-08-09."*
+
+**Deixou de valer.** `apply_to_skp` está READY: a cena editada vira um `.skp`
+novo, por execução do SketchUp em lote sobre os boxes do `SceneStore`.
+
+O que continua verdadeiro, e importa ao ler a coluna "efeito": a escrita ainda é
+em **dois tempos**. `move_object` muda a cena; o `.skp` só acompanha quando
+`apply_to_skp` roda. `get_project_state.unmaterializedEdits` diz quantas edições
+ainda não chegaram no arquivo — é a métrica honesta dessa defasagem.
 
 ---
 
@@ -39,7 +45,7 @@ o Felipe abre continua o de 2026-08-09.
 | `close_sketchup` | **MISSING** | — | — | — | — | — | tudo. `furnish_apartment` usa `taskkill /F /IM SketchUp.exe` — padrão existe, não exposto |
 | `open_project` | **READY** | `Pipeline.collect_boxes` + `SceneStore.build` | `open_project` | ❌ | ❌ (reconstrói) | ❌ | ~40 s no primeiro build; `rebuild=true` DESCARTA edições sem confirmar |
 | `save_project` | **PARTIAL** | `SceneStore.save()` — toda mutação já persiste | implícito | ✅ atômico (`.tmp` + replace) | n/a | ❌ | não existe "salvar como"; nada grava `.skp` |
-| `apply_to_skp` | **MISSING** | — | tool que recusa | — | — | — | **elo que falta.** `place_layout_skp.rb` já lê `LAYOUT_BOXES`+`LAYOUT_OUT` → é fiação, não redesenho |
+| `apply_to_skp` | **READY** | `Pipeline.materialize()` — SketchUp em lote sobre `SceneStore.boxes()` | `apply_to_skp` | ✅ `ARTIFACT`: existe, >0 byte, escrito por esta execução | ❌ o arquivo já foi escrito | ❌ não muda geometria | destino fora do repo do pipeline; SketchUp aberto → `SKETCHUP_BUSY`, fechar só com `close_sketchup=true` |
 
 ## Leitura de cena
 
@@ -133,13 +139,17 @@ o Felipe abre continua o de 2026-08-09.
 
 | | READY | PARTIAL | MISSING |
 |---|---|---|---|
-| contagem | 11 | 7 | 21 |
+| contagem | 12 | 7 | 20 |
 
-**Onde está o valor represado:** três MISSING são **fiação**, não construção,
-porque a peça pesada já existe do outro lado:
+**Onde está o valor represado:** os MISSING que importam são **fiação**, não
+construção, porque a peça pesada já existe do outro lado.
 
-1. `apply_to_skp` → `place_layout_skp.rb` já lê `LAYOUT_BOXES`
+1. ~~`apply_to_skp` → `place_layout_skp.rb` já lê `LAYOUT_BOXES`~~ — **feito no
+   slice 2 (2026-09-20).** Era o elo que faltava: sem ele, toda a operação
+   morria no documento de cena.
 2. `run_correction_loop` → `run_loop()` já aceita `boxes=`
 3. `set_color` → `recolor_kitchen_theme.rb` prova o padrão
 
-Esses três, nessa ordem, transformam o documento de cena em operação de verdade.
+Os dois restantes, nessa ordem, terminam de transformar o documento de cena em
+operação de verdade. `set_color` é o pedido original do Felipe e agora fica
+**visível no `.skp`**, porque o slice 2 existe.

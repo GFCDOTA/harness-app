@@ -142,3 +142,49 @@ em `ImplementationCatalogTest` por descasamento do repo `sketchup-mcp`
 **Limitacao:** a verificacao de `move_object` ainda prova a cena editada, nao o
 `.skp` aberto no SketchUp. Materializar em `.skp` continua sendo Slice 2
 (`apply_to_skp`) e deve evitar o caminho com `taskkill /F /IM SketchUp.exe`.
+
+---
+
+## Slice 2 — `apply_to_skp`: a cena editada vira `.skp` (2026-09-20)
+
+**Problema:** toda a operacao morria no documento de cena. O `.skp` que o Felipe
+abria era o de 2026-08-09, indiferente a qualquer comando dado. O slice 1 operava
+um MODELO da planta, nao a planta. Este slice fecha o criterio 5 da fase 1.
+
+**Mudanca**
+- `Pipeline.materialize(boxes, out_path, close_sketchup, timeout_sec)` roda o
+  SketchUp em lote sobre `place_layout_skp.rb` e devolve a evidencia do artefato.
+- Os boxes saem do `SceneStore` (baseline + edits), NUNCA do cerebro de layout —
+  recomputar entregaria o layout original e a fatia inteira seria teatro. Ha
+  teste travando isso pelo conteudo do env `LAYOUT_BOXES`.
+- `SketchUpRunner` isola processo e relogio; a suite roda sem SketchUp instalado.
+- `apply_to_skp` saiu de `UNSUPPORTED` e virou tool real: `verification=ARTIFACT`,
+  `risk=MEDIUM`, `mutates=true`, `undoable=false`, timeout do gate.
+- `verifyArtifact` no `AgentRuntime` — `ARTIFACT` nao tinha verificador e caia no
+  fail-closed, entao a capability nunca reportaria sucesso.
+- `SceneStore.mark_materialized` / `unmaterialized_edits`; `get_project_state`
+  passa a publicar `unmaterializedEdits` e `lastMaterialized`.
+
+**Decisoes que nao se reabrem sem motivo escrito**
+- Destino FORA do repo `sketchup-mcp` (ele e dependencia de leitura) e nunca o
+  `.skp` canonico. Alvo dentro do repo e recusado sem subir o SketchUp.
+- Apagar o destino ANTES de rodar: e o que torna "existe e tem tamanho" prova de
+  que ESTA execucao escreveu, e nao resto de uma anterior.
+- `.skp` de 0 byte -> `verified=false`. E a falha classica do SketchUp em lote.
+- SketchUp aberto -> RECUSA (`SKETCHUP_BUSY`, `needsHumanDecision=true`). O
+  padrao do pipeline e `taskkill /F`, que mataria a janela do Felipe com trabalho
+  possivelmente nao salvo. Fechar exige `close_sketchup=true`.
+- `ARTIFACT` sem o campo `verified` -> UNVERIFIED. Sucesso por omissao e
+  exatamente o que a hard rule #6 proibe.
+
+**Testes:** Python 93 passed (15 novos). Java 173 passed, 0 falhas (2 novos).
+
+Nota: a falha preexistente em `ImplementationCatalogTest`, registrada no slice
+1.5 como descasamento com o repo `sketchup-mcp` (`core/observability/context.py`),
+**desapareceu** — o modulo entrou no `develop` do pipeline pelo merge da PR #246
+(subsistema de observabilidade) em 2026-09-20.
+
+**Limitacao declarada:** toda a fatia esta coberta por dubles. Isso prova a
+fiacao e a honestidade do resultado, mas NAO prova que o `place_layout_skp.rb`
+aceita estes boxes e produz um `.skp` abrivel. So fecha rodando o SketchUp de
+verdade, e o veredito e VISUAL — do Felipe. Registrado no `CODEX_QUEUE.md`.

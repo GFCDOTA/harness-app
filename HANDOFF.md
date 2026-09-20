@@ -21,31 +21,42 @@
 
 ## COMO RETOMAR (sessão nova começa aqui)
 
-**O slice 1 está em `develop`.** Não há PR aberta e não há branch de feature viva.
+**Slices 1 e 2 estão em `develop`.** A edição do Felipe agora **chega no `.skp`**.
 
-**Ação pendente: slice 2 — `apply_to_skp`**, em
-[`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md). É fiação: `place_layout_skp.rb` já lê
-`LAYOUT_BOXES`/`LAYOUT_OUT`. É a fatia que faz a alteração finalmente chegar no
-`.skp` — hoje o slice 1 opera um MODELO da planta, não a planta.
+**Ação pendente: slice 3 ou slice 4**, em [`docs/CODEX_QUEUE.md`](docs/CODEX_QUEUE.md):
 
-### Estado verificado em 2026-09-19
+- **Slice 3 — service control na UI.** Menor da fila; o backend
+  (`ServiceManager`, 13 testes) já está pronto e testado, falta só o botão.
+- **Slice 4 — `set_color`.** É o **pedido original do Felipe** ("troca a cor da
+  cama para preto") e só agora faz sentido: com o slice 2 no lugar, a cor vira
+  visível no `.skp` em vez de morrer na cena.
+
+Recomendação: **slice 4**. O 3 é conveniência; o 4 fecha o pedido que originou
+o projeto inteiro.
+
+### Estado verificado em 2026-09-20
 
 | Item | Estado |
 |---|---|
-| `develop` local × origin | idênticos, `3e1cf06` |
-| PR #1 | **MERGED** 16:11 UTC · 20 commits · 101 arquivos |
-| branches de feature | **nenhuma** — as 4 mergeadas foram deletadas (remote + local) |
+| slice 2 | **entregue** — `apply_to_skp` READY |
+| suítes | **173 Java · 93 Python**, zero falhas nas duas |
 | CI | **não existe** — nenhum check configurado no repo |
-| suítes | 171 Java (1 falha pré-existente) · 78 Python |
-| `develop` × `main` | develop **33 commits à frente**; `main` não recebeu nada |
+| placar de capabilities | 12 READY · 7 PARTIAL · 20 MISSING |
 
-A pilha era linear (`master-orchestrator` ⊂ `slice1` ⊂ `slice1-impl`), então a PR #1
-levou as três de uma vez.
+### O que o slice 2 decidiu, e não se reabre sem motivo escrito
+
+| Decisão | Por quê |
+|---|---|
+| Destino **fora** do repo `sketchup-mcp` | ele é dependência de LEITURA; o `.skp` canônico nunca é alvo de execução automática |
+| Apagar o destino **antes** de rodar | é o que torna "existe e tem tamanho" prova de que ESTA execução escreveu |
+| `.skp` de 0 byte → `verified=false` | é a falha clássica do SketchUp em lote; sem a trava o sistema aprende a mentir |
+| SketchUp aberto → **recusa** (`SKETCHUP_BUSY`) | o padrão do pipeline é `taskkill /F`, que mataria a janela do Felipe com trabalho não salvo. Fechar exige `close_sketchup=true` |
+| `ARTIFACT` sem campo `verified` → UNVERIFIED | sucesso por omissão é o que a hard rule #6 proíbe |
 
 ### Branch nova sai de `origin/develop`
 
-Não trabalhar direto em `develop`. Para o slice 2:
-`git checkout -b feat/harness-slice2-apply-skp origin/develop`.
+Não trabalhar direto em `develop`. Para o slice 4:
+`git checkout -b feat/harness-slice4-set-color origin/develop`.
 
 ### ⚠️ Auth do `gh` mudou em 2026-09-19 — não voltar pro `GH_TOKEN`
 
@@ -87,10 +98,15 @@ documento de cena**. Um comando em português entra, o modelo local escolhe a
 capability, o Harness executa, os gates rodam sozinhos, o trace é gravado no
 envelope que o Inspector lê, e dá para desfazer.
 
-**A ressalva que muda a leitura de tudo:** nenhuma alteração chega ao `.skp`.
-`apply_to_skp` é MISSING. O `.skp` que o Felipe abre é o de 2026-08-09,
-indiferente a qualquer comando dado. O slice 1 opera um MODELO da planta, não a
-planta.
+**A ressalva que dominava esta seção caiu no slice 2.** Até 2026-09-20 nenhuma
+alteração chegava ao `.skp`: o arquivo que o Felipe abria era o de 2026-08-09,
+indiferente a qualquer comando. Agora `apply_to_skp` materializa a cena editada
+num `.skp` novo, com verificação de artefato.
+
+O que continua valendo, e é diferente de "não funciona": a escrita é em **dois
+tempos**. `move_object` muda a cena; o `.skp` só acompanha quando
+`apply_to_skp` roda. `unmaterializedEdits` mede essa defasagem — é o número que
+diz se o arquivo está em dia com a cena.
 
 ## ARCHITECTURE
 
@@ -118,7 +134,7 @@ que suponha o contrário está errado sobre esta máquina.
 ## CAPABILITIES
 
 Detalhe e evidência em [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
-Placar: **11 READY · 7 PARTIAL · 21 MISSING**.
+Placar: **12 READY · 7 PARTIAL · 20 MISSING**.
 
 **READY** — `open_project`, `get_scene`, `list_objects`, `find_object`,
 `get_object`, `undo`, `redo`, `snapshot`, `list_history`, `run_gates`,
