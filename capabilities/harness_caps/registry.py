@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 from . import gates as gates_mod
 from .config import HarnessConfig
-from .pipeline import Pipeline, PipelineUnavailable
+from .pipeline import Pipeline, PipelineUnavailable, SketchUpBusy
 from .scene import AmbiguousObject, SceneError, SceneStore, build_rooms
 
 #: classificação de risco. Ver CLAUDE.md §risco.
@@ -86,7 +86,6 @@ UNSUPPORTED: dict[str, str] = {
     "create_contact_sheet": "depende de render; slice 5",
     "set_camera": "depende do SketchUp em lote; slice 5",
     "run_correction_loop": "tools/correction_loop opera sobre consensus/SKP, não sobre a cena editada ainda",
-    "apply_to_skp": "materializar a cena editada num .skp exige rodar o SketchUp em lote; slice 2",
 }
 
 
@@ -141,6 +140,12 @@ class Registry:
             return _err("AMBIGUOUS", str(exc), candidates=exc.candidates)
         except SceneError as exc:
             return _err("SCENE_ERROR", str(exc))
+        except SketchUpBusy as exc:
+            # não é falha: é uma decisão que só o Felipe toma. Tipada para o
+            # agente poder repassar o pedido em vez de tentar outra tool.
+            return _err("SKETCHUP_BUSY", str(exc), capability=name,
+                        executed=False, verified=False, changed=False,
+                        changesApplied=False, needsHumanDecision=True)
         except PipelineUnavailable as exc:
             return _err("PIPELINE_UNAVAILABLE", str(exc), what=exc.what)
         except TypeError as exc:
@@ -243,6 +248,23 @@ class Registry:
              "required": ["object_id", "direction", "distance_mm"]},
             self._move_object, verification="STATE_DELTA", risk=LOW,
             undoable=True, requires=("scene",), mutates=True))
+
+        self._add(ToolSpec(
+            "apply_to_skp",
+            "Materializa a cena EDITADA num arquivo .skp novo, rodando o SketchUp em "
+            "lote. É o que faz a alteração sair do documento de cena e virar o "
+            "arquivo que o Felipe abre. Demora dezenas de segundos. Se houver um "
+            "SketchUp aberto, RECUSA — materializar precisa fechá-lo, e isso "
+            "descartaria trabalho não salvo; repita com close_sketchup=true só se o "
+            "Felipe autorizar.",
+            {"type": "object", "properties": {
+                "close_sketchup": {
+                    "type": "boolean",
+                    "description": ("autoriza fechar um SketchUp aberto. NÃO preencha "
+                                    "sozinho: só quando o Felipe disser que pode.")},
+                "reason": {"type": "string", "description": "por que, em uma linha"}}},
+            self._apply_to_skp, verification="ARTIFACT", risk=MEDIUM,
+            requires=("pipeline", "SketchUp", "scene"), timeout_sec=300, mutates=True))
 
         self._add(ToolSpec(
             "run_gates",
@@ -377,6 +399,10 @@ class Registry:
             "edits": doc["edits"], "locked": doc.get("locked", []),
             "lastCleanSnapshot": doc.get("lastCleanSnapshot"),
             "undoAvailable": bool(doc["edits"]),
+            # quantas edições ainda NÃO estão no .skp. Antes do slice 2 isto era
+            # sempre "todas" e o sistema não sabia dizer.
+            "unmaterializedEdits": self.store.unmaterialized_edits(),
+            "lastMaterialized": self.store.last_materialized(),
         }
 
     def _list_rooms(self) -> dict:
@@ -446,6 +472,22 @@ class Registry:
                 "partsMoved": obj.part_count, "edit": edit,
                 "bboxBefore": before, "bboxAfter": after.bbox_in,
                 "centerBeforeM": _center_m(before), "centerAfterM": _center_m(after.bbox_in)}
+
+    def _apply_to_skp(self, close_sketchup: bool = False, reason: str = "") -> dict:
+        """A cena editada vira arquivo. Os boxes saem do STORE, não do cérebro.
+
+        `self.store.boxes()` é `baseline + edits aplicadas`. Recomputar pelo
+        pipeline aqui devolveria o layout original e a edição do Felipe nunca
+        chegaria ao `.skp` — o bug que esta fatia existe para fechar.
+        """
+        boxes = self.store.boxes()
+        out = self.pipe.materialize(boxes, close_sketchup=bool(close_sketchup),
+                                    timeout_sec=self.cfg.gate_timeout_sec)
+        if out.get("verified"):
+            out["marked"] = self.store.mark_materialized(out["path"])
+            out["unmaterializedEdits"] = self.store.unmaterialized_edits()
+        out["reasonGiven"] = reason
+        return out
 
     def _run_gates(self, room_id: str) -> dict:
         con = self.pipe.consensus()

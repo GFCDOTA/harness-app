@@ -5,7 +5,9 @@ import harness.agent.domain.AgentRuntime;
 import harness.agent.domain.AgentState;
 import harness.agent.domain.AgentTrace;
 import harness.agent.domain.PlannerDecision;
+import harness.agent.domain.Risk;
 import harness.agent.domain.ToolCall;
+import harness.agent.domain.ToolSpec;
 import harness.agent.domain.ToolRegistry;
 import harness.agent.domain.ToolResult;
 import harness.agent.domain.TraceRecorder;
@@ -310,6 +312,59 @@ class AgentRuntimeTest {
         assertFalse(out.changedSystem());
         assertFalse(host.toolNamesCalled().contains("run_gates"),
                 "gate nao valida uma execucao que nem passou pela verificacao");
+    }
+
+    // -- slice 2: a cena vira .skp -----------------------------------------
+    /**
+     * Registra `apply_to_skp` como o Python o publica: verificacao ARTIFACT.
+     * `verified` decide; o resto e evidencia.
+     */
+    private static FakeCapabilityHost hostComApplyToSkp(final boolean verified,
+                                                        final long sizeBytes) {
+        final var host = FakeCapabilityHost.standard();
+        host.register(new ToolSpec("apply_to_skp", "materializa a cena num .skp",
+                        Map.of("type", "object", "properties", Map.of()),
+                        // undoable=false: o arquivo ja foi escrito, nao se desfaz.
+                        // mutates=true: escrever um .skp MUDA o sistema.
+                        Map.of(), "ARTIFACT", true, Risk.MEDIUM, false, true,
+                        List.of("pipeline", "SketchUp", "scene"), 300),
+                args -> ToolResult.success("apply_to_skp",
+                        Map.of("verified", verified,
+                                "path", "E:/state/materialized/planta_74_harness.skp",
+                                "sizeBytes", sizeBytes,
+                                "boxes", 42), 9));
+        return host;
+    }
+
+    @Test
+    void artefatoEscritoEverificadoTerminaClean() {
+        final var host = hostComApplyToSkp(true, 3_426_916L);
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(new ToolCall("apply_to_skp", Map.of()))),
+                PlannerDecision.finalAnswer("materializado"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("aplica no skp", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+        assertTrue(out.changedSystem());
+    }
+
+    @Test
+    void skpDeZeroByteNuncaViraSucessoNoAgente() {
+        // O .skb de 0 byte e a falha classica do SketchUp em lote. O Python ja
+        // marca verified=false; aqui travamos que o agente NAO reinterpreta isso
+        // como sucesso so porque a chamada nao lancou excecao.
+        final var host = hostComApplyToSkp(false, 0L);
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(new ToolCall("apply_to_skp", Map.of()))),
+                PlannerDecision.finalAnswer("materializado"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("aplica no skp", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.UNVERIFIED, out.status());
+        assertFalse(out.changedSystem());
     }
 
     // -- contexto entre comandos -------------------------------------------

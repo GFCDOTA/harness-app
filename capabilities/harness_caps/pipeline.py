@@ -10,6 +10,7 @@ um PASS inventado não é.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -28,11 +29,56 @@ class PipelineUnavailable(RuntimeError):
         self.why = why
 
 
+class SketchUpBusy(RuntimeError):
+    """Há um SketchUp aberto e ninguém autorizou fechá-lo.
+
+    Materializar roda o SketchUp em LOTE, e o padrão do pipeline
+    (`furnish_apartment`) é `taskkill /F /IM SketchUp.exe` antes e depois. Fazer
+    isso por conta própria mataria a janela que o Felipe tem aberta, com trabalho
+    possivelmente não salvo. Recusar e dizer por quê é a resposta; fechar exige
+    `close_sketchup=True` — autorização explícita, como manda a hard rule #7.
+    """
+
+
+class SketchUpRunner:
+    """Tudo que toca processo e relógio de verdade. Dublado inteiro nos testes.
+
+    Existe para que a suíte rode **sem** SketchUp instalado: o `Pipeline` nunca
+    chama `subprocess` nem `time` direto no caminho de materialização.
+    """
+
+    _IMAGE = "SketchUp.exe"
+
+    def is_running(self) -> bool:
+        out = subprocess.run(  # noqa: S603,S607 — comando fixo, sem entrada do usuário
+            ["tasklist", "/FI", f"IMAGENAME eq {self._IMAGE}"],
+            capture_output=True, text=True,
+        )
+        return self._IMAGE.lower() in (out.stdout or "").lower()
+
+    def kill(self) -> None:
+        subprocess.run(  # noqa: S603,S607 — idem
+            ["taskkill", "/F", "/IM", self._IMAGE], capture_output=True)
+
+    def launch(self, cmd: list[str], env: dict) -> None:
+        subprocess.Popen(  # noqa: S603 — comando DECLARADO, argumentos validados
+            cmd, env=env,
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+        )
+
+    def now(self) -> float:
+        return time.time()
+
+    def sleep(self, seconds: float) -> None:
+        time.sleep(seconds)
+
+
 class Pipeline:
     """Fachada fina sobre `sketchup-mcp`. Sem lógica de domínio própria."""
 
-    def __init__(self, cfg: HarnessConfig):
+    def __init__(self, cfg: HarnessConfig, runner: SketchUpRunner | None = None):
         self.cfg = cfg
+        self.runner = runner or SketchUpRunner()
         self._prepared = False
 
     # -- preparo ------------------------------------------------------------
@@ -176,6 +222,125 @@ class Pipeline:
         for item in out:
             item.pop("_mtime")
         return out
+
+    # -- materializar a cena ------------------------------------------------
+    def materialize_path(self) -> Path:
+        """Onde o `.skp` da cena editada é escrito.
+
+        Fora do repo do pipeline, de propósito e por duas razões: `sketchup-mcp`
+        é dependência de LEITURA do Harness, e o `.skp` canônico que o Felipe
+        abre nunca pode ser o destino de uma execução automática.
+        `.resolve()` é obrigatório — caminho relativo faz o SketchUp salvar no
+        CWD dele e produzir um "saved" falso.
+        """
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        root = self.cfg.state_dir / "materialized" / self.cfg.project
+        return (root / f"{self.cfg.project}_harness_{stamp}.skp").resolve()
+
+    def materialize(self, boxes: list[dict], *, out_path=None,
+                    close_sketchup: bool = False, timeout_sec: int = 240) -> dict:
+        """Roda o builder do pipeline sobre os boxes DADOS e devolve a evidência.
+
+        Os boxes vêm da cena editada — nunca são recomputados pelo cérebro de
+        layout. Recomputar entregaria o `.skp` de sempre e a edição do Felipe
+        morreria no documento de cena, que é exatamente o que esta fatia conserta.
+
+        Retorna sempre um dict com `verified`; falha é resultado, não exceção —
+        exceto `SketchUpBusy`, que é uma decisão que só o humano toma.
+        """
+        if not boxes:
+            return self._not_materialized("cena sem boxes — nada a materializar")
+
+        dest = Path(out_path).resolve() if out_path else self.materialize_path()
+        repo = self.cfg.pipeline_repo.resolve()
+        if dest == repo or repo in dest.parents:
+            return self._not_materialized(
+                f"destino dentro do repo do pipeline ({dest}); `sketchup-mcp` é "
+                "dependência de leitura e o .skp canônico nunca é sobrescrito")
+
+        if self.runner.is_running():
+            if not close_sketchup:
+                raise SketchUpBusy(
+                    "há um SketchUp aberto. Materializar roda o SketchUp em lote e "
+                    "precisa fechá-lo — o que descartaria trabalho não salvo na "
+                    "janela aberta. Feche você mesmo, ou chame de novo com "
+                    "close_sketchup=true para autorizar.")
+            self.runner.kill()
+            self.runner.sleep(1)
+
+        base, rb, exe = self._materialize_inputs()
+        log = dest.with_name(dest.stem + "_log.txt")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # apagar ANTES é o que torna "existe e tem tamanho" uma prova de que ESTA
+        # execução escreveu — e não o resto de uma execução anterior.
+        for stale in (dest, log):
+            if stale.exists():
+                stale.unlink()
+
+        env = os.environ.copy()
+        env["PT_TO_M"] = self.cfg.pt_to_m
+        env["LAYOUT_BOXES"] = json.dumps(boxes)
+        env["LAYOUT_OUT"] = str(dest).replace("\\", "/")
+        env["LAYOUT_LOG"] = str(log).replace("\\", "/")
+        # o .skp base é POSICIONAL e vem ANTES de -RubyStartup; invertido, o
+        # SketchUp ignora o arquivo e o builder trabalha sobre documento vazio.
+        cmd = [str(exe), str(base), "-RubyStartup", str(rb)]
+
+        self.runner.launch(cmd, env)
+        deadline = self.runner.now() + timeout_sec
+        while self.runner.now() < deadline and not log.exists():
+            self.runner.sleep(1)
+        timed_out = not log.exists()
+        # fecha o LOTE que nós mesmos subimos (não havia outro: ou não existia,
+        # ou o fechamento foi autorizado acima).
+        self.runner.kill()
+
+        if timed_out:
+            return self._not_materialized(
+                f"timeout: o SketchUp não produziu log em {timeout_sec}s", path=dest)
+        if not dest.exists():
+            return self._not_materialized(
+                "o builder rodou mas não escreveu o .skp", path=dest,
+                log=self._tail(log))
+        size = dest.stat().st_size
+        if size == 0:
+            return self._not_materialized(
+                "o .skp saiu com 0 byte — sintoma clássico de falha do SketchUp "
+                "em lote", path=dest, log=self._tail(log))
+        return {
+            "verified": True,
+            "path": str(dest),
+            "sizeBytes": size,
+            "boxes": len(boxes),
+            "log": self._tail(log),
+        }
+
+    def _materialize_inputs(self) -> tuple[Path, Path, Path]:
+        repo = self.cfg.pipeline_repo
+        base = repo / "artifacts" / self.cfg.project / f"{self.cfg.project}.skp"
+        rb = repo / "tools" / "place_layout_skp.rb"
+        exe = Path(self.cfg.sketchup_exe)
+        for what, path in (("shell .skp", base), ("place_layout_skp.rb", rb),
+                           ("SketchUp", exe)):
+            if not path.exists():
+                raise PipelineUnavailable(what, f"não encontrado em {path}")
+        return base, rb, exe
+
+    @staticmethod
+    def _not_materialized(reason: str, *, path=None, log: str | None = None) -> dict:
+        out: dict[str, object] = {"verified": False, "reason": reason}
+        if path is not None:
+            out["path"] = str(path)
+        if log:
+            out["log"] = log
+        return out
+
+    @staticmethod
+    def _tail(log: Path, limit: int = 2000) -> str:
+        try:
+            return log.read_text("utf-8", errors="replace")[-limit:]
+        except OSError:
+            return ""
 
     def open_in_sketchup(self, skp_path: str) -> dict:
         """Abre um .skp no SketchUp desta máquina.

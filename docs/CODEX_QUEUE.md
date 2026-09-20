@@ -59,7 +59,19 @@ cada passo. `AgentRuntimeTest` tem 28 testes que cobrem o laço.
 
 ---
 
-## SLICE 2 — `apply_to_skp`: a cena vira `.skp`
+## SLICE 2 — `apply_to_skp`: a cena vira `.skp` ✅ **ENTREGUE 2026-09-20**
+
+> Fechado. `Pipeline.materialize()` + tool `apply_to_skp` (verificação `ARTIFACT`),
+> `verifyArtifact` no `AgentRuntime`, e `unmaterializedEdits` na cena.
+> 15 testes Python novos + 2 Java (173 · 93, zero falhas).
+>
+> **O risco do `taskkill` foi decidido assim:** SketchUp aberto → **recusa**
+> (`SKETCHUP_BUSY`, `needsHumanDecision=true`). Fechar exige `close_sketchup=true`.
+> Matar a janela do Felipe por conta própria descartaria trabalho não salvo.
+>
+> **Não entregue de propósito:** o teste de integração que roda o SketchUp de
+> verdade. Fica como item separado — precisa da máquina com o SketchUp instalado
+> e não pode viver na suíte normal. Ver "o que falta" no fim desta seção.
 
 **Goal:** fechar o critério 5 da fase 1. Hoje toda edição morre no documento de
 cena e o `.skp` que o Felipe abre é de 2026-08-09.
@@ -92,7 +104,20 @@ O padrão de invocação está em `tools/furnish_apartment.py:main()` — `taskk
 
 **Riscos:** único slice que depende do SketchUp instalado. `furnish_apartment` dá
 `taskkill /F /IM SketchUp.exe` — **isso mata a janela que o Felipe tem aberta.**
-Decidir e documentar: recusar se houver SketchUp aberto, ou avisar antes.
+~~Decidir e documentar: recusar se houver SketchUp aberto, ou avisar antes.~~
+**Decidido: RECUSAR.** `SketchUpBusy` → erro tipado `SKETCHUP_BUSY` com
+`needsHumanDecision=true`; fechar só com `close_sketchup=true`.
+
+### O que falta deste slice
+
+**Um teste de integração real, fora do CI.** Toda a fatia está coberta por
+dublês (`FakeRunner`), que provam a fiação e a honestidade do resultado — mas
+não provam que o `place_layout_skp.rb` aceita estes boxes e produz um `.skp`
+abrível. Isso só fecha rodando o SketchUp de verdade, nesta máquina.
+
+Como fazer quando houver a janela para isso: `apply_to_skp` numa cena com uma
+edição conhecida → abrir o `.skp` de saída → conferir que o objeto moveu. É
+verificação VISUAL, então o veredito é do Felipe.
 
 ---
 
