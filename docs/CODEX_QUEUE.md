@@ -145,7 +145,20 @@ comando.
 
 ---
 
-## SLICE 4 — Materiais e cor `[o pedido do Felipe]`
+## SLICE 4 — Materiais e cor `[o pedido do Felipe]` ✅ **ENTREGUE 2026-09-20**
+
+> `set_color` READY. Tabela fechada em `colors.py` (27 cores + sinônimos em
+> inglês), `SceneStore.recolor` na mesma fila do `translate` (undo de graça),
+> `verifyColorDelta` no Java. 17 testes Python + 2 Java.
+>
+> **A armadilha que quase deixou a fatia falsa:** `place_layout_skp.rb:44` reusa
+> material **pelo nome** (`return m if m`) e ignora o `rgb` novo. Trocar a cor
+> mantendo `ph_<kind>` daria um `.skp` idêntico, em silêncio. Resolvido com
+> `mat_name` próprio por objeto+cor (`harness_<objectId>_<hex>`).
+>
+> **`set_material` continua MISSING de propósito** — textura é outra coisa que
+> cor: precisa de PNG por kind via `LAYOUT_TEX_MAP`. A recusa agora aponta
+> `set_color` em vez de só dizer "não implementado".
 
 **Goal:** `"troca a cor da cama para preto"` funciona de ponta a ponta.
 

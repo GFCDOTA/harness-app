@@ -72,8 +72,8 @@ ainda não chegaram no arquivo — é a métrica honesta dessa defasagem.
 
 | capability | status | implementação | entry point | verified? | undoable? | gates? | falta |
 |---|---|---|---|---|---|---|---|
-| `set_color` | **MISSING** | box tem `rgb`; nada o edita | tool que recusa | — | — | — | handler + undo; **é o pedido do Felipe** |
-| `set_material` | **MISSING** | `style_spec.texture_env` + `LAYOUT_TEX_MAP` no build | tool que recusa | — | — | — | idem |
+| `set_color` | **READY** | `SceneStore.recolor` + tabela fechada em `colors.py` | `set_color` | ✅ `STATE_DELTA`: relê o `rgb`, igual ao anterior → UNVERIFIED | ✅ mesma fila do `translate` | ❌ cor não move nada; `gatesRun: false` explícito | **era o pedido do Felipe.** Visível no `.skp` via `apply_to_skp` |
+| `set_material` | **MISSING** | `style_spec.texture_env` + `LAYOUT_TEX_MAP` no build | tool que recusa | — | — | — | TEXTURA é outra coisa que cor: precisa de PNG por kind. A recusa agora aponta `set_color` |
 | `set_texture` | **MISSING** | `assets/textures/procedural` existe | tool que recusa | — | — | — | idem |
 
 > **Ativo reaproveitável:** `tools/recolor_kitchen_theme.rb` faz exatamente o
@@ -139,17 +139,22 @@ ainda não chegaram no arquivo — é a métrica honesta dessa defasagem.
 
 | | READY | PARTIAL | MISSING |
 |---|---|---|---|
-| contagem | 12 | 7 | 20 |
+| contagem | 13 | 7 | 19 |
 
-**Onde está o valor represado:** os MISSING que importam são **fiação**, não
-construção, porque a peça pesada já existe do outro lado.
+**Onde estava o valor represado** — os três MISSING que eram **fiação**, não
+construção:
 
-1. ~~`apply_to_skp` → `place_layout_skp.rb` já lê `LAYOUT_BOXES`~~ — **feito no
-   slice 2 (2026-09-20).** Era o elo que faltava: sem ele, toda a operação
-   morria no documento de cena.
-2. `run_correction_loop` → `run_loop()` já aceita `boxes=`
-3. `set_color` → `recolor_kitchen_theme.rb` prova o padrão
+1. ~~`apply_to_skp`~~ — **feito no slice 2 (2026-09-20).** Era o elo que faltava:
+   sem ele toda a operação morria no documento de cena.
+2. ~~`set_color`~~ — **feito no slice 4 (2026-09-20).** Era o pedido original do
+   Felipe ("troca a cor da cama para preto") e só fechou porque o slice 2 existe:
+   sem materializar, a cor mudaria só na cena.
+3. `run_correction_loop` → `run_loop()` já aceita `boxes=` — **o último**.
 
-Os dois restantes, nessa ordem, terminam de transformar o documento de cena em
-operação de verdade. `set_color` é o pedido original do Felipe e agora fica
-**visível no `.skp`**, porque o slice 2 existe.
+### A armadilha do slice 4, registrada para não ser re-descoberta
+
+`place_layout_skp.rb:44` faz `m = model.materials[name]; return m if m` —
+material é reusado **pelo NOME** e o `rgb` de quem chega depois é **ignorado**.
+Trocar a cor mantendo o `ph_<kind>` compartilhado produziria um `.skp`
+visualmente idêntico, em silêncio. Por isso `set_color` atribui um `mat_name`
+próprio (`harness_<objectId>_<hex>`), determinístico e estável.

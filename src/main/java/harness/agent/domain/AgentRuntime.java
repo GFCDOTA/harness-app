@@ -235,6 +235,9 @@ public final class AgentRuntime {
         if ("STATE_DELTA".equals(strategy) && "move_object".equals(call.tool())) {
             return verifyMoveDelta(call, result);
         }
+        if ("STATE_DELTA".equals(strategy) && "set_color".equals(call.tool())) {
+            return verifyColorDelta(result);
+        }
         if ("ARTIFACT".equals(strategy)) {
             return verifyArtifact(result);
         }
@@ -267,6 +270,31 @@ public final class AgentRuntime {
             final var why = String.valueOf(data.getOrDefault("reason", "artefato nao verificado"));
             evidence.put("reason", why);
             return Verification.fail(why, evidence);
+        }
+        return Verification.ok(evidence);
+    }
+
+    /**
+     * STATE_DELTA de cor: o {@code rgb} relido tem de ser diferente do anterior.
+     *
+     * <p>Um handler que responde ok mas nao mudou o {@code rgb} e o caso que o
+     * CODEX_QUEUE manda pegar. Sem isto, "troquei a cor" viraria CLEAN com a cama
+     * da mesma cor de antes — o modelo resumiria sucesso e o Felipe descobriria
+     * abrindo o arquivo.
+     */
+    private static Verification verifyColorDelta(final ToolResult result) {
+        final var before = result.data().get("rgbBefore");
+        final var after = result.data().get("rgbAfter");
+        final var evidence = new LinkedHashMap<String, Object>();
+        evidence.put("strategy", "STATE_DELTA");
+        evidence.put("rgbBefore", before);
+        evidence.put("rgbAfter", after);
+        if (after == null) {
+            return Verification.fail("set_color nao devolveu rgbAfter verificavel", evidence);
+        }
+        if (after.equals(before)) {
+            return Verification.fail(
+                    "a cor relida e a mesma de antes: a alteracao nao aconteceu", evidence);
         }
         return Verification.ok(evidence);
     }

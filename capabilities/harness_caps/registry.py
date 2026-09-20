@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from . import colors
 from . import gates as gates_mod
 from .config import HarnessConfig
 from .pipeline import Pipeline, PipelineUnavailable, SketchUpBusy
@@ -79,7 +80,8 @@ UNSUPPORTED: dict[str, str] = {
     "scale_object": "dimensão vem da classe paramétrica de móvel (derive_spec), não de escala livre",
     "create_object": "criação é do cérebro de layout; a tool viria de furniture_class",
     "delete_object": "remoção muda o programa do cômodo — HIGH, e ainda sem caminho reversível",
-    "set_material": "material/textura vive em style_spec + LAYOUT_TEX_MAP, ainda não exposto",
+    "set_material": ("TEXTURA é outra coisa que cor: vive em style_spec + LAYOUT_TEX_MAP "
+                     "e precisa de PNG por kind. Para mudar a COR de um objeto use `set_color`"),
     "render": "render sobe o SketchUp em lote (não é serviço vivo); slice 5",
     "render_room": "idem render",
     "visual_review": "depende de render + juiz visual; slice 5",
@@ -138,6 +140,10 @@ class Registry:
                         changesApplied=False)
         except AmbiguousObject as exc:
             return _err("AMBIGUOUS", str(exc), candidates=exc.candidates)
+        except colors.UnknownColor as exc:
+            # a lista vai JUNTO: o modelo corrige sozinho em vez de chutar outro nome
+            return _err("UNKNOWN_COLOR", str(exc), available=exc.available,
+                        changed=False, changesApplied=False)
         except SceneError as exc:
             return _err("SCENE_ERROR", str(exc))
         except SketchUpBusy as exc:
@@ -247,6 +253,25 @@ class Registry:
                 "reason": {"type": "string", "description": "por que, em uma linha"}},
              "required": ["object_id", "direction", "distance_mm"]},
             self._move_object, verification="STATE_DELTA", risk=LOW,
+            undoable=True, requires=("scene",), mutates=True))
+
+        self._add(ToolSpec(
+            "set_color",
+            "Troca a COR de um objeto da planta. A cor vem de uma tabela fechada — "
+            "escolha um nome da lista, NÃO invente RGB nem nome novo. Pinta todas as "
+            "peças do módulo (a cama inteira, não só o colchão). Reversível por `undo`. "
+            "A cor só aparece no .skp depois de `apply_to_skp`.",
+            {"type": "object", "properties": {
+                "object_id": obj,
+                # o enum lista TUDO que o sistema aceita — canônicos e sinônimos.
+                # Só os canônicos deixaria `black` (alias válido) ser rejeitado
+                # pelo schema, e a tabela de sinônimos viraria peso morto.
+                "color": {"type": "string",
+                          "enum": sorted(set(colors.PALETTE) | set(colors.ALIASES)),
+                          "description": "nome da cor, da lista. Prefira o canônico em português"},
+                "reason": {"type": "string", "description": "por que, em uma linha"}},
+             "required": ["object_id", "color"]},
+            self._set_color, verification="STATE_DELTA", risk=MEDIUM,
             undoable=True, requires=("scene",), mutates=True))
 
         self._add(ToolSpec(
@@ -472,6 +497,29 @@ class Registry:
                 "partsMoved": obj.part_count, "edit": edit,
                 "bboxBefore": before, "bboxAfter": after.bbox_in,
                 "centerBeforeM": _center_m(before), "centerAfterM": _center_m(after.bbox_in)}
+
+    def _set_color(self, object_id: str, color: str, reason: str = "") -> dict:
+        """Cor é TABELA, não palpite: nome fora da lista recusa com as disponíveis.
+
+        Gate de geometria não roda aqui de propósito — cor não move nada, e
+        rodar seria teatro. `gatesRun: False` diz isso explicitamente, em vez de
+        omitir e deixar parecer que rodou (hard rule #6).
+        """
+        canonical, rgb = colors.resolve(color)
+        obj = self.store.resolve_one(object_id)
+        before = [b.get("rgb") for b in self.store.boxes_of(obj.id)]
+        mat = f"harness_{obj.id}_{colors.hexcode(rgb)}"
+        edit = self.store.recolor(obj.id, rgb, mat, color_name=canonical, reason=reason)
+        after = self.store.boxes_of(obj.id)
+        return {
+            "objectId": obj.id, "label": obj.label, "room": obj.room,
+            "roomId": obj.room_id, "color": canonical,
+            "rgbBefore": before[0] if before else None,
+            "rgbAfter": list(rgb), "materialName": mat,
+            "partsPainted": len(after), "edit": edit,
+            "gatesRun": False,
+            "note": "a cor so aparece no .skp depois de apply_to_skp",
+        }
 
     def _apply_to_skp(self, close_sketchup: bool = False, reason: str = "") -> dict:
         """A cena editada vira arquivo. Os boxes saem do STORE, não do cérebro.

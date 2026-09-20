@@ -250,12 +250,30 @@ class SceneStore:
         return [b for b in self.boxes() if b.get("room") in names]
 
     def _apply(self, boxes: list[dict], edit: dict) -> list[dict]:
-        if edit["op"] != "translate":
-            raise SceneError(f"operação desconhecida no log: {edit['op']}")
+        op = edit["op"]
         oid = edit["objectId"]
-        dx, dy, dz = edit["dxIn"], edit["dyIn"], edit["dzIn"]
-        return [translate_box(b, dx, dy, dz) if self._object_id(b) == oid else b
-                for b in boxes]
+        if op == "translate":
+            dx, dy, dz = edit["dxIn"], edit["dyIn"], edit["dzIn"]
+            return [translate_box(b, dx, dy, dz) if self._object_id(b) == oid else b
+                    for b in boxes]
+        if op == "recolor":
+            return [self._recolored(b, edit) if self._object_id(b) == oid else b
+                    for b in boxes]
+        raise SceneError(f"operação desconhecida no log: {op}")
+
+    @staticmethod
+    def _recolored(box: dict, edit: dict) -> dict:
+        """Aplica cor + nome de material no box, sem tocar em geometria.
+
+        O `mat_name` NÃO é decoração: `place_layout_skp.rb` reusa material pelo
+        NOME (`return m if m`) e ignora o `rgb` de quem chegou depois. Trocar a
+        cor mantendo o `ph_<kind>` compartilhado daria um `.skp` idêntico, em
+        silêncio. Nome próprio é o que faz a cor existir no arquivo.
+        """
+        out = dict(box)
+        out["rgb"] = list(edit["rgb"])
+        out["mat_name"] = edit["matName"]
+        return out
 
     # -- identidade ---------------------------------------------------------
     def _object_id(self, box: dict) -> str:
@@ -364,6 +382,29 @@ class SceneStore:
             "dxIn": round(float(dx_in), 6), "dyIn": round(float(dy_in), 6),
             "dzIn": round(float(dz_in), 6),
             "at": _now(), "reason": reason,
+        }
+        doc["edits"].append(edit)
+        self.save()
+        return edit
+
+    def recolor(self, object_id: str, rgb, mat_name: str, *,
+                color_name: str = "", reason: str = "") -> dict:
+        """Pinta TODAS as peças do objeto. Mesma fila de edições do `translate`.
+
+        Ser a mesma fila é o que dá undo/redo de graça e o que faz
+        `unmaterializedEdits` contar cor junto com movimento — a cor também
+        precisa de um `apply_to_skp` para chegar no arquivo.
+        """
+        doc = self.load()
+        obj = self.object(object_id)
+        if obj.locked:
+            raise SceneError(
+                f"'{object_id}' está travado (o Felipe pediu para não mexer). "
+                "Use `unlock_object` antes.")
+        edit = {
+            "op": "recolor", "objectId": object_id,
+            "rgb": [int(c) for c in rgb], "matName": mat_name,
+            "colorName": color_name, "at": _now(), "reason": reason,
         }
         doc["edits"].append(edit)
         self.save()
