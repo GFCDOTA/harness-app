@@ -391,6 +391,34 @@ class SceneStore:
     def history(self) -> list[dict]:
         return list(self.load()["edits"])
 
+    # -- materialização -----------------------------------------------------
+    def mark_materialized(self, path: str) -> dict:
+        """Anota que a cena, COMO ESTÁ AGORA, virou um `.skp`.
+
+        Guarda a contagem de edições no momento, não um booleano: é isso que
+        permite responder "quantas edições ainda não foram para o arquivo" depois
+        de mais uma edição, sem recomputar nada.
+        """
+        doc = self.load()
+        mark = {"at": _now(), "path": path, "editCount": len(doc["edits"])}
+        doc["materialized"] = mark
+        self.save()
+        return dict(mark)
+
+    def last_materialized(self) -> dict | None:
+        return self.load().get("materialized")
+
+    def unmaterialized_edits(self) -> int:
+        """Quantas edições ainda não chegaram no `.skp`.
+
+        Sem materialização nenhuma, toda edição está pendente — que é a verdade
+        do sistema antes desta fatia existir.
+        """
+        doc = self.load()
+        mark = doc.get("materialized")
+        done = int(mark.get("editCount", 0)) if mark else 0
+        return max(len(doc["edits"]) - done, 0)
+
     # -- travas -------------------------------------------------------------
     def lock(self, object_id: str) -> list[str]:
         doc = self.load()

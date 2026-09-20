@@ -235,8 +235,40 @@ public final class AgentRuntime {
         if ("STATE_DELTA".equals(strategy) && "move_object".equals(call.tool())) {
             return verifyMoveDelta(call, result);
         }
+        if ("ARTIFACT".equals(strategy)) {
+            return verifyArtifact(result);
+        }
         return Verification.fail("estrategia de verificacao sem verificador: " + strategy,
                 Map.of("strategy", strategy));
+    }
+
+    /**
+     * ARTIFACT: a prova e um arquivo que passou a existir, com tamanho.
+     *
+     * <p>Quem checa disco e o capability host — ele e que sabe onde o arquivo
+     * deveria estar e se o mtime e desta execucao. Aqui o contrato e o campo
+     * {@code verified}: ausente significa que ninguem provou nada, e isso e
+     * UNVERIFIED, nunca sucesso por omissao. Um {@code .skp} de 0 byte e a falha
+     * classica do SketchUp em lote e chega aqui como {@code verified=false}.
+     */
+    private static Verification verifyArtifact(final ToolResult result) {
+        final var data = result.data();
+        final var claim = data.get("verified");
+        final var evidence = new LinkedHashMap<String, Object>();
+        evidence.put("strategy", "ARTIFACT");
+        evidence.put("path", String.valueOf(data.getOrDefault("path", "")));
+        evidence.put("sizeBytes", data.getOrDefault("sizeBytes", 0));
+        if (!(claim instanceof Boolean verified)) {
+            return Verification.fail(
+                    "a tool nao declarou `verified` — sem prova de artefato nao ha sucesso",
+                    evidence);
+        }
+        if (!verified) {
+            final var why = String.valueOf(data.getOrDefault("reason", "artefato nao verificado"));
+            evidence.put("reason", why);
+            return Verification.fail(why, evidence);
+        }
+        return Verification.ok(evidence);
     }
 
     private static Verification verifyMoveDelta(final ToolCall call, final ToolResult result) {
