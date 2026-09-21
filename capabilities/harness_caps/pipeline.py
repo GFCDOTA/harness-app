@@ -198,26 +198,33 @@ class Pipeline:
         entregaria a planta errada. `scene.skp` é arquivo de trabalho do
         SketchUp e fica de fora — regra do projeto, não heurística.
         """
-        root = self.cfg.pipeline_repo / "artifacts" / self.cfg.project
-        if not root.exists():
-            return []
+        # DUAS raízes: os artefatos do pipeline E o que o PRÓPRIO Harness
+        # materializou. Sem a segunda, `apply_to_skp` produzia um arquivo que o
+        # Harness não conseguia abrir — o modelo achava a tool certa e não achava
+        # o arquivo. Gap pego rodando o app (2026-09-21).
+        roots = [self.cfg.pipeline_repo / "artifacts" / self.cfg.project,
+                 self.materialize_path().parent]
         out = []
-        for path in root.rglob("*.skp"):
-            name = path.name.lower()
-            if any(bad in name for bad in self._SKP_IGNORE):
+        for root in roots:
+            if not root.exists():
                 continue
-            stat = path.stat()
-            if stat.st_size == 0:
-                continue
-            out.append({
-                "name": path.name,
-                "path": str(path),
-                "relative": str(path.relative_to(root)),
-                "sizeMb": round(stat.st_size / 1e6, 2),
-                "modified": time.strftime("%Y-%m-%dT%H:%M:%S",
-                                          time.localtime(stat.st_mtime)),
-                "_mtime": stat.st_mtime,
-            })
+            for path in root.rglob("*.skp"):
+                name = path.name.lower()
+                if any(bad in name for bad in self._SKP_IGNORE):
+                    continue
+                stat = path.stat()
+                if stat.st_size == 0:
+                    continue
+                out.append({
+                    "name": path.name,
+                    "path": str(path),
+                    "relative": str(path.relative_to(root)),
+                    "sizeMb": round(stat.st_size / 1e6, 2),
+                    "modified": time.strftime("%Y-%m-%dT%H:%M:%S",
+                                              time.localtime(stat.st_mtime)),
+                    "source": "harness" if root is roots[1] else "pipeline",
+                    "_mtime": stat.st_mtime,
+                })
         out.sort(key=lambda item: item["_mtime"], reverse=True)
         for item in out:
             item.pop("_mtime")

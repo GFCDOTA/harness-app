@@ -19,6 +19,7 @@ Tudo roda sem SketchUp: `FakeRunner` é o dublê de processo e de relógio.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -265,3 +266,23 @@ def test_edicao_depois_de_materializar_volta_a_ficar_pendente(tmp_path):
 
     assert reg.store.unmaterialized_edits() == 1
     assert reg.invoke("get_project_state", {})["data"]["unmaterializedEdits"] == 1
+
+
+def test_skp_materializado_pelo_harness_aparece_na_lista(tmp_path):
+    """Gap pego rodando o app: o Harness gerava um .skp que ele nao abria.
+
+    `skp_artifacts()` varria so `artifacts/<projeto>` do repo do pipeline. Como o
+    slice 2 escreve FORA desse repo de proposito, a saida do proprio Harness
+    ficava invisivel para `open_skp_in_sketchup` — o modelo achava a tool certa e
+    nao achava o arquivo.
+    """
+    cfg = _cfg(tmp_path)
+    pipe = Pipeline(cfg, runner=FakeRunner())
+
+    out = pipe.materialize([_box()])
+    assert out["verified"] is True
+
+    nomes = {a["name"]: a for a in pipe.skp_artifacts()}
+    gerado = Path(out["path"]).name
+    assert gerado in nomes, f"o .skp que o Harness acabou de gerar sumiu da lista: {list(nomes)}"
+    assert nomes[gerado]["source"] == "harness"

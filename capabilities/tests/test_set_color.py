@@ -242,3 +242,20 @@ def test_a_cor_chega_no_env_que_o_builder_le(tmp_path):
     assert enviado[0]["mat_name"].endswith("1a1a1c")
     # e depois de materializar, nao ha mais edicao pendente
     assert res["data"]["unmaterializedEdits"] == 0
+
+
+def test_tool_desconhecida_sugere_a_parecida(tmp_path):
+    """O modelo chuta `open_skp`; a real e `open_skp_in_sketchup`.
+
+    Despejar as 35 tools nao ajuda — ele ignora a lista e chuta de novo. A
+    sugestao dirigida e o que ele consegue usar. Pego rodando o app (2026-09-21).
+    """
+    reg = Registry(_cfg(tmp_path))
+
+    res = reg.invoke("open_skp", {})
+
+    assert res["ok"] is False
+    err = res["error"]
+    assert err["code"] == "UNKNOWN_TOOL"
+    assert "open_skp_in_sketchup" in err["didYouMean"]
+    assert "Você quis dizer" in err["message"]

@@ -12,6 +12,7 @@ não sei fazer" é resposta; fingir um stub verde não é.
 """
 from __future__ import annotations
 
+import difflib
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -118,9 +119,15 @@ class Registry:
         spec = self._tools.get(name)
         if spec is None:
             reason = UNSUPPORTED.get(name)
+            # Sugestão DIRIGIDA. Despejar as 35 tools não ajuda: o modelo ignora a
+            # lista e chuta de novo (`open_skp`, `save_skp` — a real é
+            # `open_skp_in_sketchup`). Um "você quis dizer X?" é o que ele usa.
+            close = difflib.get_close_matches(name, sorted(self._tools), n=3, cutoff=0.5)
+            hint = f" Você quis dizer: {', '.join(close)}?" if close else ""
             return _err("UNKNOWN_TOOL",
-                        f"capability '{name}' não existe" + (f": {reason}" if reason else ""),
-                        available=sorted(self._tools))
+                        f"capability '{name}' não existe" + (f": {reason}" if reason else "")
+                        + hint,
+                        didYouMean=close, available=sorted(self._tools))
         args = dict(args or {})
         if not spec.implemented:
             reason = UNSUPPORTED.get(name, "capability ainda nao implementada")
@@ -212,7 +219,12 @@ class Registry:
             "não altera o arquivo.",
             {"type": "object", "properties": {
                 "name": {"type": "string",
-                         "description": "nome do arquivo; omitido = o mais recente"}}},
+                         "description": "nome do arquivo; omitido = o mais recente"},
+                # O modelo chama isto de `skp_path`/`path` com teimosia (pego
+                # rodando o app). Aceitar a forma que ele usa é mais barato que
+                # brigar por prompt — o handler normaliza para o nome do arquivo.
+                "skp_path": {"type": "string", "description": "idem `name` (sinônimo)"},
+                "path": {"type": "string", "description": "idem `name` (sinônimo)"}}},
             self._open_skp, risk=MEDIUM, requires=("pipeline", "SketchUp"),
             timeout_sec=30))
 
@@ -268,7 +280,12 @@ class Registry:
                 # pelo schema, e a tabela de sinônimos viraria peso morto.
                 "color": {"type": "string",
                           "enum": sorted(set(colors.PALETTE) | set(colors.ALIASES)),
-                          "description": "nome da cor, da lista. Prefira o canônico em português"},
+                          "description": "nome da cor, da lista. Prefira o canônico em português",
+                          # nome aceito -> canônico. O Java consome isto para saber
+                          # QUAIS cores o comando do Felipe nomeou, sem duplicar a
+                          # tabela: a fonte de verdade continua sendo `colors.py`.
+                          "x-canonical": {**{k: k for k in colors.PALETTE},
+                                          **colors.ALIASES}},
                 "reason": {"type": "string", "description": "por que, em uma linha"}},
              "required": ["object_id", "color"]},
             self._set_color, verification="STATE_DELTA", risk=MEDIUM,
@@ -442,18 +459,22 @@ class Registry:
         return {"count": len(items), "newest": items[0] if items else None,
                 "artifacts": items[:20]}
 
-    def _open_skp(self, name: str | None = None) -> dict:
+    def _open_skp(self, name: str | None = None, skp_path: str | None = None,
+                  path: str | None = None) -> dict:
+        # `skp_path`/`path` são sinônimos que o modelo insiste em usar. Normaliza
+        # aqui: caminho completo vira nome de arquivo, que é o que a busca usa.
+        raw = name or skp_path or path
         items = self.pipe.skp_artifacts()
         if not items:
             raise SceneError(
-                f"nenhum .skp encontrado em artifacts/{self.cfg.project}/ "
+                f"nenhum .skp encontrado para {self.cfg.project} "
                 "— o projeto ainda não foi materializado")
-        if name:
-            wanted = str(name).strip().lower()
+        if raw:
+            wanted = str(raw).replace("\\", "/").rsplit("/", 1)[-1].strip().lower()
             matches = [i for i in items if wanted in i["name"].lower()]
             if not matches:
                 raise SceneError(
-                    f"nenhum .skp com '{name}'. Disponíveis: "
+                    f"nenhum .skp com '{raw}'. Disponíveis: "
                     + ", ".join(i["name"] for i in items[:6]))
             chosen = matches[0]
         else:

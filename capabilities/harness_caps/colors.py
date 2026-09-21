@@ -57,8 +57,11 @@ ALIASES: dict[str, str] = {
     "burgundy": "vinho", "concrete": "concreto",
     "light wood": "madeira-clara", "dark wood": "madeira-escura",
     "preta": "preto", "branca": "branco", "vermelha": "vermelho",
-    "amarela": "amarelo", "cinzento": "cinza", "escuro": "cinza-escuro",
+    "amarela": "amarelo", "cinzento": "cinza",
 }
+# NÃO mapear "escuro"/"claro" sozinhos: são qualificadores, não cores. "escuro"
+# → cinza-escuro fazia "verde-escuro" no comando contar como se o Felipe tivesse
+# nomeado cinza-escuro, e a guarda de cor inventada deixaria passar a troca.
 
 
 class UnknownColor(ValueError):
