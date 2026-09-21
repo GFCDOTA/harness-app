@@ -236,3 +236,42 @@ sai explicito no resultado, em vez de omitir e deixar parecer que rodou.
 
 **Limitacao declarada:** como no slice 2, tudo e duble. Nenhum `.skp` real foi
 gerado. O fechamento honesto e abrir o arquivo e olhar — veredito do Felipe.
+
+---
+
+## Rodando o app DE VERDADE — 4 defeitos que 184 testes verdes nao pegaram (2026-09-21)
+
+Pedido do Felipe: "faz testes com a app harness, pede pra ela alterar algumas
+coisas na planta e verifica se esta fazendo corretamente". Cinco comandos em
+portugues contra a planta_74, com Ollama vivo e SketchUp em lote.
+
+**O que a fatia de capabilities entregou, provado:** `set_color` + `apply_to_skp`
+geraram um `.skp` real (543 KB, 404 boxes, 18s). Um inspetor Ruby read-only
+confirmou DENTRO do arquivo: material `harness_suite_01.cama_1a1a1c` com
+`rgb=(26,26,28)`, aplicado a **9 entidades** — as 9 pecas da cama. Os 179
+materiais `ph_*` compartilhados ficaram intactos, o que prova que o nome proprio
+era mesmo necessario. A divida "nenhum .skp real foi gerado" esta FECHADA.
+
+**O que quebrou foi o PLANNER, e nada disso aparecia em teste com duble:**
+
+1. **Laco em tool que muda estado.** "desfaz a ultima alteracao" -> `undo` 4x ->
+   7 edicoes desfeitas. Mutacao identica agora bloqueada com `ALREADY_APPLIED`.
+2. **`EXHAUSTED` mentindo.** Desfecho dizia "sem chegar a um desfecho" para
+   comando cuja alteracao foi aplicada E verificada.
+3. **Modelo contrariando o comando.** "trinta centimetros para a ESQUERDA" ->
+   `direction=right, distance_mm=100`, aplicado. `contradictsCommand` barra.
+4. **Falso negativo do slice 4** (meu): verificador de cor comparava o relido com
+   o ANTERIOR, reprovando repintura idempotente.
+
+Todos reproduzidos em teste ANTES do fix e re-verificados no app real DEPOIS.
+Java 184, Python 109.
+
+**A licao que fica:** a suite roda sem Ollama de proposito, e isso e certo — mas
+significa que ela nao cobre o planner. Rodar o `HarnessCli` contra o modelo real
+faz parte de "esta funcionando". Tabela de falhas do modelo atualizada no
+`CLAUDE.md`.
+
+**Aberto, nao corrigido:** distancia errada com direcao certa ainda passa (30 cm
+-> 100 mm) — parsing de medida em portugues livre da falso positivo facil e
+precisa de desenho proprio; o modelo alucina `error_response` (registry recusa,
+sem dano); e ignora o comodo nomeado quando o objeto resolve unico em outro lugar.

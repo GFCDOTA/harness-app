@@ -107,9 +107,24 @@ propriedades dele, e o sistema tem que absorver cada uma.
 | conclui "não existe" a partir de lista cortada | resultado é COMPACTADO (id/room/locked), nunca truncado |
 | força o pedido nas tools que tem | capability inexistente é tool que recusa com motivo |
 | resume errado o que acabou de fazer | operação de um significado só (`undo`, `restore`) tem resumo escrito pelo Harness |
+| **repete a MESMA tool depois de ter sucesso, até esgotar as tentativas** | mutação idêntica é bloqueada no mesmo comando (`ALREADY_APPLIED`), e a recusa volta como dado. Leitura segue livre |
+| **contraria o que o Felipe disse** ("esquerda" → `direction=right`) | `contradictsCommand` barra direção contrária à nomeada. Diferente de `fabricatedMeasurement`: aquela pergunta "disse algo?", esta "o argumento bate?" |
+| **nunca emite o desfecho, mesmo tendo feito o pedido** | tentativas esgotadas COM alteração verificada não viram `EXHAUSTED` — o desfecho sai do que aconteceu, não da narrativa |
+| **inventa nome de tool** (`error_response`) | registry recusa com `UNKNOWN_TOOL` + a lista real. Segue sendo ruído até esgotar; não há dano |
+
+As quatro últimas linhas vieram de **rodar o app de verdade em 2026-09-21**, não
+de teste com dublê. A primeira delas destruía dados: um "desfaz a última
+alteração" virou 4 `undo` e desfez 7 edições.
 
 **Regra que sai disso:** quando o modelo erra de um jeito que muda o projeto, a
 correção é determinística. Prompt só para o que é preferência de estilo.
+
+⚠️ **Dublê não pega isto.** A suíte roda sem Ollama de propósito, e por isso
+nenhum desses quatro apareceu em 184 testes verdes. Rodar o `HarnessCli` contra
+o modelo real, periodicamente, é parte de "está funcionando" — não luxo.
+`java -cp "target/classes;$(cat target/cp.txt)" harness.cli.HarnessCli "<comando>"`,
+com o `java` do **JDK 25** pelo caminho absoluto (o do PATH é o 21 e falha com
+"class file version 69.0").
 
 ## Source of truth (não duplicar)
 
