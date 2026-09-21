@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -368,8 +369,13 @@ class AgentRuntimeTest {
     }
 
     // -- slice 4: cor ------------------------------------------------------
-    /** `set_color` como o Python o publica: STATE_DELTA sobre o rgb. */
-    private static FakeCapabilityHost hostComSetColor(final Object rgbAfter) {
+    /**
+     * `set_color` como o Python o publica: STATE_DELTA comparando o rgb RELIDO
+     * com o PEDIDO. {@code rgbBefore} e so evidencia — nao decide.
+     */
+    private static FakeCapabilityHost hostComSetColor(final Object rgbBefore,
+                                                      final Object rgbAfter,
+                                                      final Object rgbRequested) {
         final var host = FakeCapabilityHost.standard();
         host.register(new ToolSpec("set_color", "troca a cor de um objeto",
                         Map.of("type", "object", "properties",
@@ -382,8 +388,9 @@ class AgentRuntimeTest {
                         Map.of("objectId", String.valueOf(args.get("object_id")),
                                 "roomId", "r000", "label", "Cama",
                                 "color", String.valueOf(args.get("color")),
-                                "rgbBefore", List.of(200, 200, 200),
+                                "rgbBefore", rgbBefore,
                                 "rgbAfter", rgbAfter,
+                                "rgbRequested", rgbRequested,
                                 "partsPainted", 2,
                                 "gatesRun", false), 7));
         return host;
@@ -395,8 +402,27 @@ class AgentRuntimeTest {
     }
 
     @Test
+    void repintarDaCorQueJaEstaContinuaSendoSucesso() {
+        // Falso negativo pego rodando o app DE VERDADE (2026-09-21): o modelo
+        // chamou set_color duas vezes, e a segunda reprovou porque a cama ja
+        // estava preta. Idempotente e o resultado certo, nao falha.
+        final var host = hostComSetColor(List.of(26, 26, 28), List.of(26, 26, 28),
+                List.of(26, 26, 28));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintar())),
+                PlannerDecision.finalAnswer("ja estava preta"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("troca a cor da cama para preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+    }
+
+    @Test
     void trocarCorDeixaOcomandoCleanSemRodarGateDeGeometria() {
-        final var host = hostComSetColor(List.of(26, 26, 28));
+        final var host = hostComSetColor(List.of(200, 200, 200), List.of(26, 26, 28),
+                List.of(26, 26, 28));
         final var planner = new ScriptedPlanner("q",
                 PlannerDecision.callTools(List.of(pintar())),
                 PlannerDecision.finalAnswer("pintado"));
@@ -414,8 +440,9 @@ class AgentRuntimeTest {
     @Test
     void handlerQueDizTerPintadoMasNaoMudouOrgbViraUnverified() {
         // O caso que o CODEX_QUEUE pede explicitamente: "verification pega um
-        // handler que diz ter mudado e nao mudou".
-        final var host = hostComSetColor(List.of(200, 200, 200));
+        // handler que diz ter mudado e nao mudou". Pediu preto, releu cinza.
+        final var host = hostComSetColor(List.of(200, 200, 200), List.of(200, 200, 200),
+                List.of(26, 26, 28));
         final var planner = new ScriptedPlanner("q",
                 PlannerDecision.callTools(List.of(pintar())),
                 PlannerDecision.finalAnswer("pintado"));
@@ -426,6 +453,155 @@ class AgentRuntimeTest {
 
         assertEquals(AgentOutcome.Status.UNVERIFIED, out.status());
         assertFalse(out.changedSystem());
+    }
+
+    // -- a guarda contra o laco do modelo ----------------------------------
+    @Test
+    void toolQueMUDAestadoNaoRodaDuasVezesNoMesmoComando() {
+        // BUG REAL, pego rodando o app (2026-09-21): pedi "desfaz a ultima
+        // alteracao" e o modelo chamou `undo` QUATRO vezes, cada uma com
+        // sucesso. Resultado: 7 edicoes desfeitas quando o Felipe pediu 1.
+        // O laco do modelo e uma propriedade dele; a correcao e deterministica.
+        final var host = FakeCapabilityHost.standard();
+        final var desfazer = new ToolCall("undo", Map.of());
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(desfazer)),
+                PlannerDecision.callTools(List.of(desfazer)),
+                PlannerDecision.callTools(List.of(desfazer)),
+                PlannerDecision.finalAnswer("desfeito"));
+
+        runtime(host, planner, new AgentState("p"), 4)
+                .execute("desfaz a ultima alteracao",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        final var vezes = host.toolNamesCalled().stream().filter("undo"::equals).count();
+        assertEquals(1, vezes, "undo so podia ter chegado ao host UMA vez");
+    }
+
+    @Test
+    void repeticaoBloqueadaVolta_como_dado_para_o_modelo_nao_derruba_o_comando() {
+        final var host = FakeCapabilityHost.standard();
+        final var desfazer = new ToolCall("undo", Map.of());
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(desfazer)),
+                PlannerDecision.callTools(List.of(desfazer)),
+                PlannerDecision.finalAnswer("pronto"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 4)
+                .execute("desfaz a ultima alteracao",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        // o comando termina normalmente: a 2a chamada virou ERRO TIPADO de volta
+        // pro modelo, nao excecao nem EXHAUSTED
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+        assertTrue(out.actions().stream().anyMatch(a -> !a.ok() && "undo".equals(a.tool())),
+                "a repeticao tem que aparecer como acao recusada");
+    }
+
+    @Test
+    void leituraRepetidaContinuaPermitida() {
+        // So tool que MUDA estado e bloqueada. Reler nao destroi nada, e travar
+        // leitura quebraria fluxo legitimo (listar, filtrar, listar de novo).
+        final var host = FakeCapabilityHost.standard();
+        final var achar = new ToolCall("find_object", Map.of("query", "escrivaninha"));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(achar)),
+                PlannerDecision.callTools(List.of(achar)),
+                PlannerDecision.finalAnswer("achei"));
+
+        runtime(host, planner, new AgentState("p"), 4)
+                .execute("onde esta a escrivaninha?",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        final var vezes = host.toolNamesCalled().stream()
+                .filter("find_object"::equals).count();
+        assertEquals(2, vezes);
+    }
+
+    @Test
+    void tentativasEsgotadasComAlteracaoAplicadaNaoViraExhausted() {
+        // Pego rodando o app: o modelo desfez a alteracao, foi bloqueado ao
+        // repetir, alucinou uma tool inexistente e nunca concluiu. O desfecho
+        // saiu EXHAUSTED "sem chegar a um desfecho" — mentira: o undo ACONTECEU.
+        // Quem responde pelo desfecho e o que aconteceu, nao a narrativa do modelo.
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 300))),
+                PlannerDecision.callTools(List.of(new ToolCall("nao_existe", Map.of()))),
+                PlannerDecision.callTools(List.of(new ToolCall("nao_existe", Map.of()))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("move a escrivaninha 30 cm para a esquerda",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(out.changedSystem(), "a alteracao aconteceu");
+        assertNotEquals(AgentOutcome.Status.EXHAUSTED, out.status(),
+                "status nao pode ser EXHAUSTED quando houve alteracao verificada");
+    }
+
+    // -- a guarda contra o modelo CONTRARIAR o comando ---------------------
+    @Test
+    void direcaoContrariaAoComandoNaoExecuta() {
+        // BUG REAL (2026-09-21): pedi "trinta centimetros para a ESQUERDA" e o
+        // modelo chamou move_object(direction=right, distance_mm=100). A guarda
+        // `fabricatedMeasurement` deixou passar porque o comando TINHA uma
+        // medida — ela pergunta "o usuario disse algo?", nao "o argumento bate
+        // com o que ele disse?". Inverter a direcao do Felipe e pior que inventar.
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "right", 100))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("move a escrivaninha trinta centimetros para a esquerda",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("move_object"),
+                "nao pode ter movido para o lado errado");
+    }
+
+    @Test
+    void direcaoQueBateComOcomandoExecutaNormalmente() {
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "left", 300))),
+                PlannerDecision.finalAnswer("movido"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("move a escrivaninha trinta centimetros para a esquerda",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("move_object"));
+    }
+
+    @Test
+    void comandoSemDirecaoNomeadaNaoEbloqueado() {
+        // "afasta da parede" nao nomeia lado; a guarda so age sobre CONTRADICAO.
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "right", 300))),
+                PlannerDecision.finalAnswer("movido"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("afasta a escrivaninha trinta centimetros da parede",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("move_object"));
+    }
+
+    @Test
+    void sinonimoDeDirecaoContaComoAmesmaDirecao() {
+        // "para tras" e "back" sao a mesma familia de eixo no registry Python.
+        final var host = FakeCapabilityHost.standard();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(move("suite_01.escrivaninha", "back", 300))),
+                PlannerDecision.finalAnswer("movido"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("empurra a escrivaninha trinta centimetros para tras",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("move_object"));
     }
 
     // -- contexto entre comandos -------------------------------------------

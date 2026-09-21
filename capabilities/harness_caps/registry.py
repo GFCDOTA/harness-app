@@ -511,11 +511,17 @@ class Registry:
         mat = f"harness_{obj.id}_{colors.hexcode(rgb)}"
         edit = self.store.recolor(obj.id, rgb, mat, color_name=canonical, reason=reason)
         after = self.store.boxes_of(obj.id)
+        # `rgbAfter` é o valor RELIDO da cena, não o pedido — é o que permite a
+        # verificação pegar um handler que diz ter pintado e não pintou.
+        # `rgbRequested` é o alvo; quem verifica compara os dois.
         return {
             "objectId": obj.id, "label": obj.label, "room": obj.room,
             "roomId": obj.room_id, "color": canonical,
             "rgbBefore": before[0] if before else None,
-            "rgbAfter": list(rgb), "materialName": mat,
+            "rgbAfter": after[0].get("rgb") if after else None,
+            "rgbRequested": list(rgb),
+            "alreadyThatColor": before[0] == list(rgb) if before else False,
+            "materialName": mat,
             "partsPainted": len(after), "edit": edit,
             "gatesRun": False,
             "note": "a cor so aparece no .skp depois de apply_to_skp",
