@@ -2,6 +2,7 @@ package harness.agent.domain;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -61,6 +62,12 @@ public final class AgentRuntime {
         final var actions = new ArrayList<AgentOutcome.Action>();
         final var gateResults = new ArrayList<Map<String, Object>>();
         final var history = new ArrayList<LlmPlanner.Step>();
+        // Assinatura das mutacoes JA aplicadas neste comando. O modelo local
+        // repete a mesma tool depois de ter sucesso — propriedade dele, nao bug
+        // isolado — e em tool que muda estado isso destroi dados: um "desfaz a
+        // ultima alteracao" virou 4 `undo` e apagou 7 edicoes. Correcao
+        // deterministica, como manda o CLAUDE.md deste repo.
+        final var applied = new LinkedHashSet<String>();
 
         trace.runStarted(command, contextMeta());
 
@@ -124,6 +131,16 @@ public final class AgentRuntime {
                                     List.of(Map.of("tool", call.tool(), "args", call.args())),
                                     command);
                         }
+                        final var contradicted = contradictsCommand(command, call);
+                        if (contradicted != null) {
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "CONTRADICTS_COMMAND", contradicted);
+                            return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                    contradicted, actions, gateResults,
+                                    List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                            "reason", "direção contraria o comando")),
+                                    command);
+                        }
                         final var invented = fabricatedMeasurement(command, call);
                         if (invented != null) {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
@@ -146,6 +163,19 @@ public final class AgentRuntime {
                             continue;
                         }
 
+                        final var signature = call.tool() + "|" + call.args();
+                        if (admission.spec().mutates() && applied.contains(signature)) {
+                            final var repeated = ToolResult.failure(call.tool(), "ALREADY_APPLIED",
+                                    "isto ja foi aplicado neste mesmo comando; nao repeti. "
+                                            + "Se o pedido ja esta atendido, responda ao Felipe.",
+                                    Map.of("tool", call.tool(), "args", call.args()), 0);
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "ALREADY_APPLIED", repeated.errorMessage());
+                            history.add(new LlmPlanner.Step(call, repeated));
+                            actions.add(action(call, repeated, false));
+                            continue;
+                        }
+
                         final var result = this.host.invoke(call);
                         trace.toolCalled(trace.newSpan(), planSpan, call, result);
                         history.add(new LlmPlanner.Step(call, result));
@@ -161,6 +191,9 @@ public final class AgentRuntime {
                                         verification.message(), actions, gateResults, List.of(), command);
                             }
                             this.state.observe(result);
+                            if (admission.spec().mutates()) {
+                                applied.add(signature);
+                            }
                             actions.add(action(call, result, admission.spec().mutates()));
                         } else {
                             actions.add(action(call, result, admission.spec().mutates()));
@@ -175,9 +208,21 @@ public final class AgentRuntime {
             }
         }
 
+        // O modelo pode gastar as tentativas SEM emitir um desfecho mesmo tendo
+        // feito o que foi pedido — ele repete tool, alucina nome de tool, e nunca
+        // conclui. Nesse caso EXHAUSTED mentiria: dizer "sem chegar a um desfecho"
+        // para quem teve a alteração aplicada e verificada é relatório errado.
+        // Quem responde pelo desfecho é o que ACONTECEU, não a narrativa do modelo.
+        final var changed = actions.stream().anyMatch(a -> a.ok() && a.mutating());
+        if (changed) {
+            return finish(trace, startedAt, concluding(actions, gateResults),
+                    "O modelo não fechou o raciocínio, mas a alteração foi aplicada e "
+                            + "verificada. Segue o que aconteceu de verdade:",
+                    actions, gateResults, List.of(), command);
+        }
         return finish(trace, startedAt, AgentOutcome.Status.EXHAUSTED,
                 "Gastei as " + this.maxAttempts + " tentativas sem chegar a um desfecho. "
-                        + "O que fiz está no trace e continua desfazível.",
+                        + "Nada foi alterado.",
                 actions, gateResults, List.of(), command);
     }
 
@@ -285,16 +330,24 @@ public final class AgentRuntime {
     private static Verification verifyColorDelta(final ToolResult result) {
         final var before = result.data().get("rgbBefore");
         final var after = result.data().get("rgbAfter");
+        final var requested = result.data().get("rgbRequested");
         final var evidence = new LinkedHashMap<String, Object>();
         evidence.put("strategy", "STATE_DELTA");
         evidence.put("rgbBefore", before);
         evidence.put("rgbAfter", after);
-        if (after == null) {
-            return Verification.fail("set_color nao devolveu rgbAfter verificavel", evidence);
-        }
-        if (after.equals(before)) {
+        evidence.put("rgbRequested", requested);
+        if (after == null || requested == null) {
             return Verification.fail(
-                    "a cor relida e a mesma de antes: a alteracao nao aconteceu", evidence);
+                    "set_color nao devolveu rgbAfter/rgbRequested verificavel", evidence);
+        }
+        // O certo e comparar o estado RELIDO com o PEDIDO, nao com o anterior.
+        // Comparar com o anterior reprovava repintar de preto o que ja era preto
+        // — operacao idempotente, resultado correto — como "a alteracao nao
+        // aconteceu". Falso negativo pego rodando o app de verdade (2026-09-21).
+        if (!after.equals(requested)) {
+            return Verification.fail(
+                    "a cor relida nao e a pedida: o objeto nao ficou como foi pedido",
+                    evidence);
         }
         return Verification.ok(evidence);
     }
@@ -365,6 +418,23 @@ public final class AgentRuntime {
     /** Tools cujo efeito depende de uma MEDIDA que só o usuário pode ter dado. */
     private static final List<String> MEASURED_TOOLS = List.of("move_object");
 
+    /**
+     * Palavra de direção → FAMÍLIA DE EIXO, nas mesmas famílias que o registry
+     * Python usa. "cima"/"trás" são +Y (planta vista de cima), não Z; só
+     * "raise"/"lower" são Z. Manter alinhado com {@code _DIRECTIONS} lá.
+     */
+    private static final Map<String, String> DIRECTION_FAMILY = Map.ofEntries(
+            Map.entry("esquerda", "X-"), Map.entry("left", "X-"), Map.entry("oeste", "X-"),
+            Map.entry("west", "X-"),
+            Map.entry("direita", "X+"), Map.entry("right", "X+"), Map.entry("leste", "X+"),
+            Map.entry("east", "X+"),
+            Map.entry("cima", "Y+"), Map.entry("up", "Y+"), Map.entry("norte", "Y+"),
+            Map.entry("north", "Y+"), Map.entry("tras", "Y+"), Map.entry("trás", "Y+"),
+            Map.entry("back", "Y+"), Map.entry("atras", "Y+"), Map.entry("atrás", "Y+"),
+            Map.entry("baixo", "Y-"), Map.entry("down", "Y-"), Map.entry("sul", "Y-"),
+            Map.entry("south", "Y-"), Map.entry("frente", "Y-"), Map.entry("forward", "Y-"),
+            Map.entry("raise", "Z+"), Map.entry("lower", "Z-"));
+
     /** Números por extenso que contam como medida dita — a lista é curta de propósito. */
     private static final List<String> SPELLED_NUMBERS = List.of(
             "um ", "uma ", "dois", "duas", "tres", "três", "quatro", "cinco", "seis",
@@ -391,6 +461,38 @@ public final class AgentRuntime {
      *
      * @return a explicação quando a medida foi inventada, ou {@code null} quando veio do comando
      */
+    /**
+     * O modelo escolheu uma direção que CONTRARIA a que o Felipe nomeou?
+     *
+     * <p>Diferente de {@link #fabricatedMeasurement}: aquela pergunta "o usuário
+     * disse alguma medida?"; esta pergunta "o argumento bate com o que ele
+     * disse?". A diferença apareceu rodando o app de verdade — "trinta
+     * centímetros para a ESQUERDA" virou {@code direction=right}, e passou,
+     * porque o comando tinha sim uma medida. Inverter o lado que a pessoa pediu
+     * é pior que inventar um número: o resultado parece deliberado.
+     *
+     * <p>Age só sobre CONTRADIÇÃO. Comando que não nomeia lado ("afasta da
+     * parede") não é bloqueado — aí a escolha é legitimamente do planejador.
+     *
+     * @return a explicação quando há contradição, ou {@code null} quando não há
+     */
+    private static String contradictsCommand(final String command, final ToolCall call) {
+        if (!MEASURED_TOOLS.contains(call.tool())) return null;
+        final var chosen = DIRECTION_FAMILY.get(
+                String.valueOf(call.args().getOrDefault("direction", "")).toLowerCase().trim());
+        if (chosen == null) return null;
+        final var said = command == null ? "" : command.toLowerCase();
+        final var asked = new java.util.LinkedHashSet<String>();
+        for (final var entry : DIRECTION_FAMILY.entrySet()) {
+            if (said.contains(entry.getKey())) asked.add(entry.getValue());
+        }
+        if (asked.isEmpty() || asked.contains(chosen)) return null;
+        return "Você pediu para mover em outra direção. O comando diz "
+                + String.join("/", asked) + " e o modelo escolheu " + chosen
+                + " (" + call.args().get("direction") + "). Não vou mover para o lado "
+                + "que você não pediu — reformule ou confirme essa proposta.";
+    }
+
     private static String fabricatedMeasurement(final String command, final ToolCall call) {
         if (!MEASURED_TOOLS.contains(call.tool())) return null;
         final var said = command == null ? "" : command.toLowerCase();
