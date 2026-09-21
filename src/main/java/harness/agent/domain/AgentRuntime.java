@@ -131,6 +131,16 @@ public final class AgentRuntime {
                                     List.of(Map.of("tool", call.tool(), "args", call.args())),
                                     command);
                         }
+                        final var inventedColor = fabricatedColor(command, call, admission.spec());
+                        if (inventedColor != null) {
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "UNGROUNDED_ARGUMENT", inventedColor);
+                            return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                    inventedColor, actions, gateResults,
+                                    List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                            "reason", "cor não veio do comando")),
+                                    command);
+                        }
                         final var contradicted = contradictsCommand(command, call);
                         if (contradicted != null) {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
@@ -491,6 +501,56 @@ public final class AgentRuntime {
                 + String.join("/", asked) + " e o modelo escolheu " + chosen
                 + " (" + call.args().get("direction") + "). Não vou mover para o lado "
                 + "que você não pediu — reformule ou confirme essa proposta.";
+    }
+
+    /**
+     * O modelo escolheu uma cor que o Felipe NUNCA nomeou?
+     *
+     * <p>Irmã de {@link #fabricatedMeasurement}, para o eixo da cor. Veio de um
+     * caso real (2026-09-21): o comando era "pinta o sofá da sala de terracota",
+     * e o modelo pintou o sofá de terracota <em>e a escrivaninha da suíte 01 de
+     * AZUL</em>. Ninguém falou em escrivaninha nem em azul. A guarda de repetição
+     * não pega — os argumentos são diferentes —, e o gate não pega, porque cor
+     * não move nada. É a hard rule #3 do repo: gate verde não valida alteração
+     * inventada.
+     *
+     * <p>A tabela de cores vive no Python; aqui ela chega pelo {@code x-canonical}
+     * publicado no schema da tool. Nada é duplicado.
+     *
+     * <p>Se o comando não nomeia cor nenhuma, não bloqueia: aí a escolha é
+     * legitimamente do planejador (ex.: "deixa a sala mais quente").
+     */
+    private static String fabricatedColor(final String command, final ToolCall call,
+                                          final ToolSpec spec) {
+        if (!"set_color".equals(call.tool())) return null;
+        final var canonicalByName = canonicalColorNames(spec);
+        if (canonicalByName.isEmpty()) return null;
+        final var chosenRaw = String.valueOf(
+                call.args().getOrDefault("color", "")).toLowerCase().trim();
+        final var chosen = canonicalByName.getOrDefault(chosenRaw, chosenRaw);
+        if (chosen.isBlank()) return null;
+        final var said = command == null ? "" : command.toLowerCase();
+        final var named = new LinkedHashSet<String>();
+        for (final var entry : canonicalByName.entrySet()) {
+            if (said.contains(entry.getKey())) named.add(entry.getValue());
+        }
+        if (named.isEmpty() || named.contains(chosen)) return null;
+        return "Você não pediu essa cor. O comando fala em " + String.join("/", named)
+                + " e o modelo quis aplicar " + chosen + " em "
+                + call.args().getOrDefault("object_id", "?")
+                + ". Não vou pintar o que você não pediu.";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> canonicalColorNames(final ToolSpec spec) {
+        final var props = spec.inputSchema().get("properties");
+        if (!(props instanceof Map<?, ?> byName)) return Map.of();
+        if (!(byName.get("color") instanceof Map<?, ?> color)) return Map.of();
+        if (!(color.get("x-canonical") instanceof Map<?, ?> table)) return Map.of();
+        final var out = new LinkedHashMap<String, String>();
+        table.forEach((k, v) -> out.put(String.valueOf(k).toLowerCase(),
+                String.valueOf(v).toLowerCase()));
+        return out;
     }
 
     private static String fabricatedMeasurement(final String command, final ToolCall call) {

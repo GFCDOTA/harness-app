@@ -380,7 +380,14 @@ class AgentRuntimeTest {
         host.register(new ToolSpec("set_color", "troca a cor de um objeto",
                         Map.of("type", "object", "properties",
                                 Map.of("object_id", Map.of("type", "string"),
-                                        "color", Map.of("type", "string")),
+                                        // `x-canonical` e publicado pelo Python: nome
+                                        // aceito -> canonico. O dubl e' um recorte.
+                                        "color", Map.of("type", "string",
+                                                "x-canonical", Map.of(
+                                                        "preto", "preto", "black", "preto",
+                                                        "azul", "azul", "blue", "azul",
+                                                        "terracota", "terracota",
+                                                        "verde", "verde"))),
                                 "required", List.of("object_id", "color")),
                         Map.of(), "STATE_DELTA", true, Risk.MEDIUM, true, true,
                         List.of("scene"), 30),
@@ -602,6 +609,64 @@ class AgentRuntimeTest {
                         new AgentTrace("r", TraceRecorder.NOOP));
 
         assertTrue(host.toolNamesCalled().contains("move_object"));
+    }
+
+    // -- a guarda contra ALTERACAO INVENTADA -------------------------------
+    private static ToolCall pintarDe(final String id, final String cor) {
+        return new ToolCall("set_color", Map.of("object_id", id, "color", cor));
+    }
+
+    @Test
+    void corQueNinguemPediuNaoViraAlteracao() {
+        // BUG REAL (2026-09-21): pedi "pinta o sofa da sala de terracota" e o
+        // modelo pintou o sofa de terracota E a escrivaninha da suite 01 de
+        // AZUL. Ninguem falou em escrivaninha nem em azul. A guarda de repeticao
+        // nao pega: os argumentos sao diferentes. E a hard rule #3 do repo
+        // ("alteracao inventada nao passa"), que so existia para MEDIDA.
+        final var host = hostComSetColor(List.of(44, 44, 48), List.of(47, 92, 158),
+                List.of(47, 92, 158));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        pintarDe("suite_01.escrivaninha", "azul"))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta o sofa da sala de terracota",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("set_color"),
+                "cor que ninguem pediu nao pode ter sido aplicada");
+    }
+
+    @Test
+    void corQueOcomandoNOMEIApassaNormalmente() {
+        final var host = hostComSetColor(List.of(44, 44, 48), List.of(186, 104, 78),
+                List.of(186, 104, 78));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        pintarDe("sala.sofa", "terracota"))),
+                PlannerDecision.finalAnswer("pintado"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta o sofa da sala de terracota",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("set_color"));
+    }
+
+    @Test
+    void sinonimoEmInglesNoComandoContaComoCorPedida() {
+        // o modelo as vezes responde em ingles mesmo com comando em portugues
+        final var host = hostComSetColor(List.of(44, 44, 48), List.of(26, 26, 28),
+                List.of(26, 26, 28));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))),
+                PlannerDecision.finalAnswer("pintado"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("paint the bed black", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("set_color"));
     }
 
     // -- contexto entre comandos -------------------------------------------

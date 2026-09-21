@@ -57,10 +57,18 @@ public final class ToolRegistry {
                     .filter(candidate -> candidate.name().equals(call.tool()))
                     .map(candidate -> " (" + candidate.reason() + ")")
                     .findFirst().orElse("");
+            // Sugestão DIRIGIDA antes da lista. Despejar 35 nomes não ajuda: o
+            // modelo ignora a lista e chuta de novo — rodando o app ele tentou
+            // `open_skp` e `save_skp` quatro vezes, sendo que a real é
+            // `open_skp_in_sketchup`. Um "você quis dizer X?" ele usa.
+            final var close = closestTools(call.tool());
+            final var didYouMean = close.isEmpty() ? ""
+                    : " Você quis dizer: " + String.join(", ", close) + "?";
             return Admission.rejected(
                     "UNKNOWN_TOOL",
-                    "capability '" + call.tool() + "' não existe" + hint
-                            + ". Disponíveis: " + String.join(", ", this.tools.keySet()));
+                    "capability '" + call.tool() + "' não existe" + hint + "."
+                            + didYouMean
+                            + " Disponíveis: " + String.join(", ", this.tools.keySet()));
         }
         if (!spec.implemented()) {
             final var reason = this.unsupported.stream()
@@ -97,5 +105,30 @@ public final class ToolRegistry {
         public boolean allowed() {
             return this.verdict == Verdict.ALLOWED;
         }
+    }
+
+    /**
+     * Tools registradas mais parecidas com o nome que o modelo inventou.
+     *
+     * <p>Critério deliberadamente simples e determinístico: nome registrado que
+     * CONTÉM o chute, ou cujo chute contém o registrado. `open_skp` acha
+     * `open_skp_in_sketchup`; `save_skp` acha `apply_to_skp` por prefixo comum.
+     * Nada de distância de edição — sugestão errada confunde mais que a lista.
+     */
+    private List<String> closestTools(final String guess) {
+        if (guess == null || guess.isBlank()) return List.of();
+        final var needle = guess.toLowerCase();
+        final var byContainment = this.tools.keySet().stream()
+                .filter(name -> name.contains(needle) || needle.contains(name))
+                .limit(3)
+                .toList();
+        if (!byContainment.isEmpty()) return byContainment;
+        // senão: mesmo prefixo até o primeiro `_` (save_skp -> save_snapshot)
+        final var head = needle.contains("_") ? needle.substring(0, needle.indexOf('_')) : needle;
+        if (head.length() < 3) return List.of();
+        return this.tools.keySet().stream()
+                .filter(name -> name.startsWith(head + "_"))
+                .limit(3)
+                .toList();
     }
 }

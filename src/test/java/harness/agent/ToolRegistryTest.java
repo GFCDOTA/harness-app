@@ -72,4 +72,33 @@ class ToolRegistryTest {
         assertEquals(Risk.LOW, Risk.of(null));
         assertEquals(Risk.HIGH, Risk.of("high"));
     }
+
+    @Test
+    void nomeInventadoGanhaSugestaoDirigidaAntesDaLista() {
+        // Rodando o app, o modelo chutou `open_skp` (a real e
+        // `open_skp_in_sketchup`) e `save_skp`, quatro vezes cada, ignorando a
+        // lista de 35 nomes que o erro devolvia. Sugestao dirigida ele usa.
+        final var reg = new ToolRegistry(
+                List.of(spec("open_skp_in_sketchup", Risk.LOW),
+                        spec("apply_to_skp", Risk.MEDIUM),
+                        spec("move_object", Risk.LOW)),
+                List.of());
+
+        final var a = reg.admit(new ToolCall("open_skp", Map.of()), false);
+
+        assertFalse(a.allowed());
+        assertEquals("UNKNOWN_TOOL", a.code());
+        assertTrue(a.message().contains("Você quis dizer: open_skp_in_sketchup"),
+                "a sugestao tem que vir ANTES da lista: " + a.message());
+    }
+
+    @Test
+    void semParecidoNenhumNaoInventaSugestao() {
+        final var reg = new ToolRegistry(List.of(spec("move_object", Risk.LOW)), List.of());
+
+        final var a = reg.admit(new ToolCall("xyz", Map.of()), false);
+
+        assertFalse(a.message().contains("Você quis dizer"),
+                "sugestao errada confunde mais que a lista: " + a.message());
+    }
 }
