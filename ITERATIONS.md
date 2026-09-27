@@ -275,3 +275,43 @@ faz parte de "esta funcionando". Tabela de falhas do modelo atualizada no
 -> 100 mm) — parsing de medida em portugues livre da falso positivo facil e
 precisa de desenho proprio; o modelo alucina `error_response` (registry recusa,
 sem dano); e ignora o comodo nomeado quando o objeto resolve unico em outro lugar.
+
+---
+
+## Troca de modelo do planner: qwen3:14b (2026-09-27)
+
+Pedido do Felipe depois dos defeitos de planner achados rodando o app: "pode
+trocar o modelo, veja se tem algum que se adequa melhor".
+
+**Medido, nao chutado.** `tools/bench_models.py` roda os MESMOS 5 comandos em
+portugues contra cada modelo, a partir do MESMO snapshot de cena, e julga pelo
+que ficou NA CENA — nao pelo que o modelo disse que fez.
+
+| Modelo | OK | media | nota |
+|---|---|---|---|
+| **qwen3:14b** | **4/5** | 17,5s / 12,4s | escolhido |
+| qwen2.5-coder:14b | 2/5 | 13,4s / 9,0s | era o default |
+| llama3.1:8b | 2/5 | 6,0s | conclui bem, mas CONVERSA em vez de chamar a tool |
+| deepseek-r1:14b | 1/5 | 26,8s | modelo de raciocinio; tool calling ruim, 108s num comando |
+
+Duas rodadas de qwen3 vs qwen2.5-coder deram resultado **identico** caso a caso —
+nao e variancia.
+
+**O que decidiu a troca, alem do placar:** no unico caso que os dois erram
+("move a escrivaninha trinta centimetros para a esquerda"), o qwen2.5-coder
+INVENTA `direction=right, distance_mm=100` — e so nao estraga porque a guarda
+`contradictsCommand` barra. O qwen3 OMITE os argumentos e pede esclarecimento.
+Falhar perguntando e estritamente melhor que falhar agindo errado.
+
+Custo: ~30% mais lento. Aceito.
+
+**Infra que mudou junto:** o store do Ollama saiu de `C:` (SSD de 240 GB que
+tinha chegado a 12 GB livres) para `I:\ollama\models` via `OLLAMA_MODELS`. E os 9
+modelos antigos foram encontrados PERDIDOS — 37 GB, em nenhum disco, nem na
+lixeira, entre 09-21 e 09-27. Nao foi acao do Claude. Re-puxados:
+`qwen2.5-coder:14b`, `qwen3:14b`, `nomic-embed-text` (este ultimo e o que a RAG
+do sketchup-mcp usa). Detalhe e gotchas na memoria do Claude.
+
+**Aberto:** o `bench_models.py` depende de um snapshot fixo no `SNAPSHOT` e cai
+para o mais recente se ele nao existir. Rodar em maquina limpa exige um
+`save_snapshot` antes.
