@@ -964,6 +964,37 @@ class AgentRuntimeTest {
         assertFalse(host.toolNamesCalled().contains("undo"));
     }
 
+    @Test
+    void recusaNAOapagaOqueJAfoiFeitoAntesDela() {
+        // BUG REAL pego ao vivo: "pinta o objeto X de dourado" PINTOU o sofa e
+        // depois o modelo encadeou `apply_to_skp` sem ter sido pedido. A guarda
+        // barrou — certo — mas o desfecho mostrava SO a recusa. O Felipe lia
+        // "nao pede apply_to_skp" com o sofa ja dourado, sem saber disso.
+        // Metade da verdade num relatorio e pior que verbosidade.
+        final var host = hostComCena();
+        host.register(new ToolSpec("apply_to_skp", "materializa",
+                        Map.of("type", "object", "properties", Map.of()),
+                        Map.of(), "ARTIFACT", true, Risk.MEDIUM, false, true,
+                        List.of("pipeline"), 300),
+                args -> ToolResult.success("apply_to_skp", Map.of("verified", true), 9));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))),
+                PlannerDecision.callTools(List.of(new ToolCall("apply_to_skp", Map.of()))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta a cama da suite 01 de preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertTrue(out.summary().contains("Parei aqui"),
+                "a recusa tem que vir DEPOIS do que foi feito: " + out.summary());
+        assertTrue(out.changedSystem(), "a pintura aconteceu e o desfecho tem que dizer");
+        // e o "que foi feito" tem que DESCREVER, nao dizer "ok". Sem isto o fix
+        // e cosmetico: "ok. Parei aqui: ..." nao informa que o objeto foi pintado.
+        assertTrue(out.summary().contains("pintada de"),
+                "o relato tem que dizer O QUE foi feito: " + out.summary());
+    }
+
     // -- regra 7: exclusividade de intencao ---------------------------------
     @Test
     void turnoDeCONTROLEnaoRodaFerramentaQueAltera() {
