@@ -860,6 +860,110 @@ class AgentRuntimeTest {
         assertTrue(host.toolNamesCalled().contains("set_color"));
     }
 
+    @Test
+    void idInexistenteComSUGESTAOvoltaComoDadoEoModeloSeCorrige() {
+        // Pego ao vivo: o modelo mandou "a cama da suite 01" como se fosse id. A
+        // sugestao existia mas o bloqueio encerrava o turno, entao ele nao podia
+        // usa-la. Mesma licao do UNKNOWN_TOOL: erro que volta como DADO faz ele se
+        // corrigir; erro que encerra, nao. Seguro porque a sugestao vem do resolver
+        // DETERMINISTICO, e o id corrigido passa pelo gate igual.
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("a cama da suite 01", "preto"))),
+                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))),
+                PlannerDecision.finalAnswer("pintado"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 4)
+                .execute("pinta a cama da suite 01 de preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+        assertTrue(host.toolNamesCalled().contains("set_color"),
+                "depois da dica, a chamada certa tinha que rodar");
+    }
+
+    @Test
+    void mismatchDeComodoCONTINUAencerrandoOturno() {
+        // NOT_FOUND com sugestao e recuperavel. ROOM_MISMATCH nao: ali o modelo
+        // escolheu objeto de outro comodo, e quem decide e o Felipe — nao se
+        // "tenta de novo" um alvo que contraria o pedido.
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        pintarDe("sala_de_jantar_sala_de_estar.sofa", "verde-escuro"))),
+                PlannerDecision.finalAnswer("nao deveria chegar aqui"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 4)
+                .execute("pinta o armario da cozinha de verde-escuro",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+    }
+
+    /** `lock_object` alem do `unlock_object` — para testar o par oposto. */
+    private static FakeCapabilityHost hostComLockEunlock() {
+        final var host = hostComUnlock();
+        host.register(new ToolSpec("lock_object", "trava um objeto",
+                        Map.of("type", "object", "properties",
+                                Map.of("object_id", Map.of("type", "string")),
+                                "required", List.of("object_id")),
+                        Map.of(), "NONE", true, Risk.LOW, false, true,
+                        List.of("scene"), 30),
+                args -> ToolResult.success("lock_object",
+                        Map.of("locked", String.valueOf(args.get("object_id"))), 3));
+        return host;
+    }
+
+    @Test
+    void pedirDESTRAVARnaoPodeAcabarTRAVANDO() {
+        // BUG REAL pego rodando ao vivo: comando "destrava a cama da suite 01".
+        // O unlock falhou por id errado, o modelo recebeu a dica e "corrigiu"
+        // chamando `lock_object`. TRAVOU o que se pediu para destravar, e o resumo
+        // disse "travada com sucesso" — verdade, e o oposto do pedido.
+        final var host = hostComLockEunlock();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        new ToolCall("lock_object", Map.of("object_id", "suite_01.cama")))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("destrava a cama da suite 01",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("lock_object"),
+                "nao fazer o OPOSTO do que foi pedido");
+    }
+
+    @Test
+    void travarQuandoOcomandoPEDEtravarFunciona() {
+        // "destrava" CONTEM "trava": a guarda nao pode confundir os dois.
+        final var host = hostComLockEunlock();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        new ToolCall("lock_object", Map.of("object_id", "suite_01.cama")))),
+                PlannerDecision.finalAnswer("travada"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("trava a cama da suite 01", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("lock_object"));
+    }
+
+    @Test
+    void operacaoDeControleQueNinguemPediuNaoRoda() {
+        // O comando fala de cor; `undo` nao foi pedido em lugar nenhum.
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(new ToolCall("undo", Map.of()))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta a cama da suite 01 de preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("undo"));
+    }
+
     // -- regra 7: exclusividade de intencao ---------------------------------
     @Test
     void turnoDeCONTROLEnaoRodaFerramentaQueAltera() {

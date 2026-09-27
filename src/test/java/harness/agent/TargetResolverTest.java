@@ -30,7 +30,8 @@ class TargetResolverTest {
                         new SceneIndex.Room("r001", "A.S. | TERRACO SOCIAL | TERRACO TECNICO"),
                         new SceneIndex.Room("r002", "SALA DE JANTAR | SALA DE ESTAR"),
                         new SceneIndex.Room("r003", "SUITE 02"),
-                        new SceneIndex.Room("r004", "COZINHA")),
+                        new SceneIndex.Room("r004", "COZINHA"),
+                        new SceneIndex.Room("r005", "BANHO 01")),
                 List.of(
                         obj("suite_01.cama", "r000", "SUITE 01", "Cama", "bed"),
                         obj("suite_01.escrivaninha", "r000", "SUITE 01", "Escrivaninha", "desk"),
@@ -43,7 +44,10 @@ class TargetResolverTest {
                         obj("a_s_terraco_social_terraco_tecnico.armario_de_servico", "r001",
                                 "A.S. | TERRACO SOCIAL | TERRACO TECNICO",
                                 "Armario de servico", "armario_servico"),
-                        obj("suite_02.cama", "r003", "SUITE 02", "Cama", "bed")));
+                        obj("suite_02.cama", "r003", "SUITE 02", "Cama", "bed"),
+                        // BANHO 01 existe de verdade e e o que torna "01" NAO
+                        // distintivo — sem ele o teste nao reproduziria o caso real.
+                        obj("banho_01.vaso", "r005", "BANHO 01", "Vaso", "toilet")));
     }
 
     private static SceneIndex.Obj obj(final String id, final String roomId, final String room,
@@ -113,6 +117,20 @@ class TargetResolverTest {
     }
 
     @Test
+    void nomeDeComodoSEMtokenDistintivoAindaIdentificaPELOconjunto() {
+        // Pego rodando o app na frente do Felipe: "suite 01" nao tem token
+        // distintivo — "suite" esta em SUITE 01 e 02, e "01" esta em SUITE 01 e
+        // BANHO 01 — mas o PAR identifica. Sem esta regra o comando caia em
+        // AMBIGUOUS entre as duas camas, o que e recusa segura e mesmo assim errada.
+        final var index = planta74();
+
+        assertEquals(java.util.Set.of("r000"),
+                index.roomsNamedIn("pinta a cama da suite 01 de vinho"));
+        assertTrue(index.roomsNamedIn("pinta a cama da suite de vinho").isEmpty(),
+                "suite sozinho continua nao identificando");
+    }
+
+    @Test
     void comComodoNomeadoAcamaDeixaDeSerAmbigua() {
         final var r = TargetResolver.resolve("pinta a cama da suite 01 de preto",
                 "suite_01.cama", planta74());
@@ -162,6 +180,29 @@ class TargetResolverTest {
 
         assertEquals(TargetResolution.Status.NOT_FOUND, r.status());
         assertTrue(r.blocked());
+    }
+
+    @Test
+    void idInexistenteSUGEREoObjetoQueOcomandoIdentifica() {
+        // Pego rodando ao vivo: o modelo mandou "a cama da suite 01" COMO SE fosse
+        // um id. A cena sabe que isso e `suite_01.cama`; recusar sem dizer qual e
+        // desperdicar informacao que o resolver ja tem. Mesmo principio do "voce
+        // quis dizer" do registry, que fez o modelo se corrigir na tentativa
+        // seguinte.
+        final var r = TargetResolver.resolve("destrava a cama da suite 01",
+                "a cama da suite 01", planta74());
+
+        assertEquals(TargetResolution.Status.NOT_FOUND, r.status());
+        assertTrue(r.reason().contains("suite_01.cama"), r.reason());
+    }
+
+    @Test
+    void semCandidatoUNICOnaoInventaSugestao() {
+        // "a cama" casa com duas: sugerir uma seria escolher pelo Felipe.
+        final var r = TargetResolver.resolve("destrava a cama", "a cama", planta74());
+
+        assertEquals(TargetResolution.Status.NOT_FOUND, r.status());
+        assertFalse(r.reason().contains("identifica"), r.reason());
     }
 
     @Test

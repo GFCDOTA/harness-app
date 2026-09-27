@@ -154,6 +154,21 @@ public final class AgentRuntime {
                             final var alvo = TargetResolver.resolve(
                                     command, String.valueOf(call.args().get("object_id")), sceneIndex);
                             trace.targetResolved(trace.newSpan(), planSpan, call, alvo);
+                            if (alvo.blocked()
+                                    && alvo.status() == TargetResolution.Status.NOT_FOUND
+                                    && alvo.reason().contains("identifica")) {
+                                // Id que nao existe MAS o comando identifica um unico
+                                // objeto: devolve como DADO e deixa o modelo tentar de
+                                // novo com o id certo — que passa pelo gate igual. E o
+                                // mesmo padrao do UNKNOWN_TOOL, que o fez se corrigir na
+                                // tentativa seguinte. Encerrar aqui desperdicaria uma
+                                // sugestao que o resolver DETERMINISTICO produziu.
+                                final var dica = ToolResult.failure(call.tool(), "TARGET_NOT_FOUND",
+                                        mensagemDeAlvo(alvo), alvo.toMeta(), 0);
+                                history.add(new LlmPlanner.Step(call, dica));
+                                actions.add(action(call, dica, false));
+                                continue;
+                            }
                             if (alvo.blocked()) {
                                 return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
                                         mensagemDeAlvo(alvo), actions, gateResults,
@@ -161,6 +176,16 @@ public final class AgentRuntime {
                                                 "targetResolution", alvo.toMeta())),
                                         command);
                             }
+                        }
+                        final var controleErrado = wrongControlOperation(command, call);
+                        if (controleErrado != null) {
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "WRONG_CONTROL_OPERATION", controleErrado);
+                            return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                    controleErrado, actions, gateResults,
+                                    List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                            "reason", "operação de controle diferente da pedida")),
+                                    command);
                         }
                         final var burlandoTrava = bypassingLock(command, call);
                         if (burlandoTrava != null) {
@@ -586,7 +611,11 @@ public final class AgentRuntime {
             case KIND_MISMATCH -> "Esse não é o objeto que você nomeou. " + alvo.reason() + ".";
             case AMBIGUOUS -> "Mais de um objeto casa com o que você pediu ("
                     + alvo.reason() + "). Diga qual, ou use o id.";
-            case NOT_FOUND -> "Não existe '" + alvo.proposedId() + "' nesta planta.";
+            case NOT_FOUND -> "Não existe '" + alvo.proposedId() + "' nesta planta."
+                    + (alvo.reason().contains("identifica")
+                       ? " " + alvo.reason().substring(alvo.reason().indexOf("o comando"))
+                         .replace("o comando identifica", "Pelo comando, o objeto é") + "."
+                       : "");
             default -> "Não consegui confirmar o alvo: " + alvo.reason() + ".";
         };
     }
@@ -641,6 +670,50 @@ public final class AgentRuntime {
         }
         return "Este comando é de controle, não de alteração. O modelo tentou rodar `"
                 + call.tool() + "`, que muda o projeto, e isso não foi pedido aqui.";
+    }
+
+    /** Palavras que autorizam cada tool de CONTROLE. Ausente = não foi pedida. */
+    private static final Map<String, List<String>> CONTROL_TOOL_WORDS = Map.of(
+            "undo", List.of("desfaz", "desfaça", "desfaca", "desfazer", "undo", "volta"),
+            "redo", List.of("refaz", "refazer", "redo"),
+            "lock_object", List.of("trava", "travar", "lock", "bloquei"),
+            "unlock_object", List.of("destrav", "desbloque", "unlock", "libera", "solta"),
+            "apply_to_skp", List.of("aplica", "aplicar", "materializ", "apply", "gera o skp"),
+            "open_skp_in_sketchup", List.of("abre", "abrir", "open", "mostra"));
+
+    /**
+     * O modelo executou a operação de controle CONTRÁRIA à pedida?
+     *
+     * <p>Caso real, pego rodando ao vivo: o comando era "destrava a cama da suíte
+     * 01". O `unlock_object` falhou por id errado, o modelo recebeu a dica — e
+     * "corrigiu" chamando {@code lock_object}. TRAVOU o que se pediu para
+     * destravar, e o resumo disse "travada com sucesso": verdade, e o oposto do
+     * pedido.
+     *
+     * <p>É o espelho de {@link #bypassingLock}. Aquela impedia remover proteção não
+     * pedida; esta impede executar a operação inversa da pedida. Juntas fazem
+     * intenção de controle ser EXCLUSIVA de verdade, não só "não muta".
+     *
+     * <p>Cuidado que o caso exige: "destrava" CONTÉM "trava". Por isso lock só
+     * passa quando há palavra de travar E NÃO há palavra de destravar.
+     */
+    private static String wrongControlOperation(final String command, final ToolCall call) {
+        final var palavras = CONTROL_TOOL_WORDS.get(call.tool());
+        if (palavras == null) return null;
+        final var said = command == null ? "" : command.toLowerCase();
+        final var pedida = palavras.stream().anyMatch(said::contains);
+        if ("lock_object".equals(call.tool())) {
+            final var pediuDestravar = CONTROL_TOOL_WORDS.get("unlock_object")
+                    .stream().anyMatch(said::contains);
+            if (pediuDestravar) {
+                return "Você pediu para DESTRAVAR e o modelo tentou TRAVAR "
+                        + call.args().getOrDefault("object_id", "?")
+                        + ". Não vou fazer o oposto do que você pediu.";
+            }
+        }
+        if (pedida) return null;
+        return "O comando não pede `" + call.tool() + "`. O modelo escolheu uma "
+                + "operação de controle que você não pediu.";
     }
 
     /** Tools cujo efeito é REMOVER uma proteção que o Felipe pôs. */
