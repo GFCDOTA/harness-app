@@ -7,7 +7,10 @@ app/
 dist/
 shots/
 state-local/
-capabilities/__pycache__/
-capabilities/**/__pycache__/
+# bytecode, em QUALQUER lugar do repo. As duas linhas antigas eram escopadas em
+# `capabilities/` e deixaram um .pyc de `tools/` ser commitado (2026-09-27); pior,
+# um `grep __pycache__ .gitignore` casava e dava a impressao de estar coberto.
+__pycache__/
+*.py[cod]
 capabilities/.pytest_cache/
 ui/.vite/
