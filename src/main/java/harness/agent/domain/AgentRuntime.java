@@ -139,7 +139,7 @@ public final class AgentRuntime {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     "CONTROL_INTENT_ONLY", soControle);
                             return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                    soControle, actions, gateResults,
+                                    comOQueJaFoiFeito(soControle, actions), actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args(),
                                             "reason", "turno de controle não altera a planta")),
                                     command);
@@ -171,7 +171,7 @@ public final class AgentRuntime {
                             }
                             if (alvo.blocked()) {
                                 return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                        mensagemDeAlvo(alvo), actions, gateResults,
+                                        comOQueJaFoiFeito(mensagemDeAlvo(alvo), actions), actions, gateResults,
                                         List.of(Map.of("tool", call.tool(), "args", call.args(),
                                                 "targetResolution", alvo.toMeta())),
                                         command);
@@ -182,7 +182,7 @@ public final class AgentRuntime {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     "WRONG_CONTROL_OPERATION", controleErrado);
                             return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                    controleErrado, actions, gateResults,
+                                    comOQueJaFoiFeito(controleErrado, actions), actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args(),
                                             "reason", "operação de controle diferente da pedida")),
                                     command);
@@ -192,7 +192,7 @@ public final class AgentRuntime {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     "LOCK_BYPASS_REFUSED", burlandoTrava);
                             return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                    burlandoTrava, actions, gateResults,
+                                    comOQueJaFoiFeito(burlandoTrava, actions), actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args(),
                                             "reason", "destravar não foi pedido")),
                                     command);
@@ -202,7 +202,7 @@ public final class AgentRuntime {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     "UNGROUNDED_ARGUMENT", inventedColor);
                             return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                    inventedColor, actions, gateResults,
+                                    comOQueJaFoiFeito(inventedColor, actions), actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args(),
                                             "reason", "cor não veio do comando")),
                                     command);
@@ -212,7 +212,7 @@ public final class AgentRuntime {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     "CONTRADICTS_COMMAND", contradicted);
                             return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                    contradicted, actions, gateResults,
+                                    comOQueJaFoiFeito(contradicted, actions), actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args(),
                                             "reason", "direção contraria o comando")),
                                     command);
@@ -222,7 +222,7 @@ public final class AgentRuntime {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
                                     "UNGROUNDED_ARGUMENT", invented);
                             return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
-                                    invented, actions, gateResults,
+                                    comOQueJaFoiFeito(invented, actions), actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args(),
                                             "reason", "medida não veio do comando")),
                                     command);
@@ -603,6 +603,25 @@ public final class AgentRuntime {
         }
     }
 
+    /**
+     * Recusa NUNCA apaga o que já deu certo antes dela.
+     *
+     * <p>Caso real: "pinta o objeto X de dourado" pintou o sofá e, em seguida, o
+     * modelo encadeou `apply_to_skp` sem ter sido pedido. A guarda barrou — certo —
+     * mas o desfecho mostrava só a recusa. O Felipe lia "não pede apply_to_skp" com
+     * o sofá já dourado, sem saber disso. Metade da verdade num relatório é pior
+     * que verbosidade.
+     */
+    private static String comOQueJaFoiFeito(final String motivo,
+                                            final List<AgentOutcome.Action> actions) {
+        final var feitas = actions.stream()
+                .filter(a -> a.ok() && a.mutating())
+                .map(AgentOutcome.Action::detail)
+                .toList();
+        if (feitas.isEmpty()) return motivo;
+        return String.join("; ", feitas) + ". Parei aqui: " + motivo;
+    }
+
     /** A recusa explica em português o que o gate viu, sem jargão de status. */
     private static String mensagemDeAlvo(final TargetResolution alvo) {
         return switch (alvo.status()) {
@@ -894,6 +913,19 @@ public final class AgentRuntime {
                     ? "alteração desfeita" : "nada para desfazer";
             case "find_object" -> data.get("count") + " objeto(s) encontrado(s)";
             case "run_gates" -> "gates: " + data.get("overall");
+            // Sem estes casos o resumo dizia "ok" e o Felipe lia uma recusa com o
+            // sofá já dourado, sem saber. Os handlers Python já devolvem os dados
+            // ricos; faltava usá-los. "ok" é ausência de relato, não relato.
+            case "set_color" -> data.get("label") + " pintada de " + data.get("color")
+                    + " (" + data.get("partsPainted") + " peças)";
+            case "apply_to_skp" -> Boolean.TRUE.equals(data.get("verified"))
+                    ? ".skp gerado com " + data.get("boxes") + " peças"
+                    : "o .skp NÃO foi gerado";
+            case "redo" -> "alteração refeita";
+            case "lock_object" -> "objeto travado";
+            case "unlock_object" -> "objeto destravado";
+            case "save_snapshot" -> "snapshot salvo";
+            case "restore_snapshot" -> "cena restaurada";
             default -> "ok";
         };
     }
