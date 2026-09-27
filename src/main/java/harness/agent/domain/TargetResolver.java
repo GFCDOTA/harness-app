@@ -47,11 +47,19 @@ public final class TargetResolver {
         final var candidatos = candidates(index, roomsNamed, nomeados, proposedId);
 
         if (proposed == null) {
-            // Id que nao existe na cena. Nao e o caso do bug, mas mentir "ok" aqui
-            // deixaria o erro aparecer so no handler, sem procedencia.
+            // Id que nao existe na cena. Mentir "ok" aqui deixaria o erro aparecer
+            // so no handler, sem procedencia.
+            //
+            // Mas se o COMANDO identifica um objeto unico, dizer qual e' e' de graca
+            // e o modelo usa: ele mandou "a cama da suite 01" como se fosse id, e a
+            // cena sabe que isso e' `suite_01.cama`. Mesmo principio do "voce quis
+            // dizer" do registry, que o fez acertar na tentativa seguinte.
+            final var sugestao = nomeados.size() == 1 ? nomeados.get(0).id() : null;
             return new TargetResolution(TargetResolution.Status.NOT_FOUND, proposedId, null,
                     roomsNamed, candidatos,
-                    "o id proposto nao existe na cena");
+                    sugestao == null
+                            ? "o id proposto nao existe na cena"
+                            : "o id proposto nao existe; o comando identifica " + sugestao);
         }
         // REGRA 1 — cross-room nunca.
         if (!roomsNamed.isEmpty() && !roomsNamed.contains(proposed.roomId())) {

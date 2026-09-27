@@ -98,13 +98,34 @@ public record SceneIndex(List<Room> rooms, List<Obj> objects) {
         return out;
     }
 
-    /** Os cômodos que o comando NOMEIA, por token distintivo. Vazio = não nomeou. */
+    /**
+     * Os cômodos que o comando NOMEIA. Vazio = não nomeou, e aí não há restrição.
+     *
+     * <p>Duas regras, porque uma só não dá conta dos nomes reais desta planta:
+     *
+     * <ol>
+     *   <li><b>token distintivo</b> — "cozinha" e "sala" aparecem no nome de um
+     *       cômodo só, então identificam sozinhos;
+     *   <li><b>todos os tokens do nome</b> — "SUITE 01" não tem token distintivo
+     *       ("suite" está em SUITE 01 e 02; "01" está em SUITE 01 e BANHO 01),
+     *       mas o PAR identifica. Sem esta segunda regra, "pinta a cama da suite
+     *       01" não nomeava cômodo nenhum e caía em AMBIGUOUS entre as duas camas.
+     * </ol>
+     *
+     * <p>A segunda regra apareceu rodando o comando na frente do Felipe: o gate
+     * recusou um pedido que qualquer humano lê como inequívoco. Recusa segura
+     * continua sendo recusa — usabilidade também é correção.
+     */
     public Set<String> roomsNamedIn(final String command) {
         final var said = significant(tokens(command));
         final var out = new LinkedHashSet<String>();
         distinctiveRoomTokens().forEach((token, ids) -> {
             if (said.contains(token)) out.addAll(ids);
         });
+        for (final var room : this.rooms) {
+            final var nome = significant(tokens(room.name()));
+            if (!nome.isEmpty() && said.containsAll(nome)) out.add(room.id());
+        }
         return out;
     }
 
