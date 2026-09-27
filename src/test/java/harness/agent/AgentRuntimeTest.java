@@ -669,6 +669,34 @@ class AgentRuntimeTest {
         assertTrue(host.toolNamesCalled().contains("set_color"));
     }
 
+    @Test
+    void statusDizAverdadeMesmoQuandoOtextoDoModeloContradiz() {
+        // Caso real (qwen3, 2026-09-27): o modelo pintou o sofa E DEPOIS respondeu
+        // "especifique o object_id e a cor, por favor forneca ambos os parametros".
+        // O TEXTO fica sendo o do modelo — decisao travada por
+        // `oResumoDeUmMoveCONTINUAsendoDoModelo`, porque a prosa dele agrega
+        // contexto. O que este teste garante e que o STATUS nao se deixa enganar:
+        // houve alteracao verificada, logo CLEAN, e a lista de acoes mostra o que
+        // foi feito de verdade.
+        final var host = hostComSetColor(List.of(44, 44, 48), List.of(44, 72, 54),
+                List.of(44, 72, 54));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("sala.sofa", "verde"))),
+                PlannerDecision.finalAnswer(
+                        "Para aplicar uma cor e necessario especificar o object_id "
+                                + "e a cor. Por favor, forneca ambos os parametros."));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta o sofa da sala de verde",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+        assertTrue(out.changedSystem());
+        assertTrue(out.actions().stream().anyMatch(a -> a.ok() && a.mutating()
+                        && "set_color".equals(a.tool())),
+                "a acao real tem que estar na lista, mesmo com o texto contradizendo");
+    }
+
     // -- contexto entre comandos -------------------------------------------
     @Test
     void oEstadoAprendeComOresultadoRealEalimentaOcomandoSeguinte() {

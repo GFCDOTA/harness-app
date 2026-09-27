@@ -590,6 +590,15 @@ public final class AgentRuntime {
         if (mutations.size() == 1 && SELF_DESCRIBING.contains(mutations.get(0).tool())) {
             return mutations.get(0).detail();
         }
+        // NOTA (2026-09-27): o texto do modelo pode CONTRADIZER o que aconteceu —
+        // o qwen3 pintou o sofa de verde-escuro e depois respondeu "especifique o
+        // object_id e a cor, por favor forneca ambos os parametros". O status
+        // estava certo (CLEAN) e o resumo mentia.
+        // NAO foi corrigido aqui de proposito: `oResumoDeUmMoveCONTINUAsendoDoModelo`
+        // trava a decisao de deixar a prosa do modelo passar num move, porque ela
+        // agrega contexto ("circulacao continua livre"). Trocar isso e decisao do
+        // Felipe, nao efeito colateral de um fix. A lista de acoes reais fica
+        // visivel logo abaixo do resumo, na UI e no CLI.
         return fromModel;
     }
 
