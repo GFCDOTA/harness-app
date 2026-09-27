@@ -47,6 +47,9 @@ public final class AgentTrace {
 
     public void emit(final String spanId, final String parentSpanId, final String component, final String category,
                      final String status, final String name, final Double durationMs, final Map<String, Object> meta) {
+        // A taxonomia é FECHADA e declarada em HarnessEvents. Nome não declarado
+        // falha aqui, alto — em vez de virar drift silencioso no envelope.
+        HarnessEvents.require(name);
         this.recorder.record(new TraceEvent(
                 this.seq.incrementAndGet(), this.runId, spanId, parentSpanId,
                 Instant.now().toString(), durationMs, component, category, status, name,

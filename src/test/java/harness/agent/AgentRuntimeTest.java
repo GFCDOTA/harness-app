@@ -877,19 +877,22 @@ class AgentRuntimeTest {
     }
 
     @Test
-    void comandoCOMPOSTOpedeAsDuasCoisasEnaoEbloqueado() {
-        // "desfaz e pinta a cama de preto" tem verbo das duas familias: o Felipe
-        // pediu as duas. Bloquear aqui seria travar pedido legitimo.
+    void comandoCOMPOSTOeRECUSADOenquantoNaoHouverTransacao() {
+        // Eu tinha LIBERADO este caso ("o Felipe pediu as duas coisas"). Revisto
+        // depois de uma review: o risco e ESTADO PARCIAL. Se o undo passa e o
+        // set_color e bloqueado pelo gate de alvo, metade do comando mudou a cena
+        // e nao ha rollback em bloco. Sem preflight/transacao, recusar e a resposta.
         final var host = hostComCena();
         final var planner = new ScriptedPlanner("q",
-                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))),
-                PlannerDecision.finalAnswer("feito"));
+                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))));
 
-        runtime(host, planner, new AgentState("p"), 3)
+        final var out = runtime(host, planner, new AgentState("p"), 3)
                 .execute("desfaz a ultima alteracao e pinta a cama da suite 01 de preto",
                         new AgentTrace("r", TraceRecorder.NOOP));
 
-        assertTrue(host.toolNamesCalled().contains("set_color"));
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("set_color"),
+                "nao executar metade de um comando composto");
     }
 
     // -- contexto entre comandos -------------------------------------------

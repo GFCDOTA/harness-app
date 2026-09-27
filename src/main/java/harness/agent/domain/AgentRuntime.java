@@ -619,8 +619,13 @@ public final class AgentRuntime {
      * sofá</b>. Cada combinação maluca que o modelo inventa não precisa de guarda
      * própria — o turno já não autoriza a família.
      *
-     * <p>Comando composto ("desfaz e pinta a cama de preto") tem verbo das duas
-     * famílias e NÃO é exclusivo: aí o Felipe pediu as duas coisas.
+     * <p><b>Comando COMPOSTO também é recusado</b>, e isto mudou depois de uma
+     * review: eu tinha liberado "desfaz e pinta a cama de preto" com o argumento
+     * de que o Felipe pediu as duas coisas. O problema é ESTADO PARCIAL — se o
+     * undo passa e o set_color é bloqueado pelo gate de alvo, metade do comando
+     * alterou a cena e a outra metade não, sem rollback. Enquanto não existir
+     * preflight/transação de verdade (validar todas as etapas ANTES de executar
+     * qualquer uma), recusar é a resposta segura.
      */
     private static String controlOnlyViolation(final String command, final ToolCall call) {
         if (!MUTATION_TOOLS.contains(call.tool())) return null;
@@ -628,7 +633,12 @@ public final class AgentRuntime {
         final var pediuControle = CONTROL_WORDS.stream().anyMatch(said::contains);
         if (!pediuControle) return null;
         final var pediuAlteracao = MUTATION_WORDS.stream().anyMatch(said::contains);
-        if (pediuAlteracao) return null;
+        if (pediuAlteracao) {
+            return "Este comando mistura controle e alteração, e eu não executo os dois "
+                    + "no mesmo turno: se a segunda metade for bloqueada, a primeira já "
+                    + "teria mudado a cena e não há como desfazer em bloco. "
+                    + "Mande em dois comandos.";
+        }
         return "Este comando é de controle, não de alteração. O modelo tentou rodar `"
                 + call.tool() + "`, que muda o projeto, e isso não foi pedido aqui.";
     }
