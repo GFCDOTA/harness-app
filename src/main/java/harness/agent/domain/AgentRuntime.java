@@ -131,6 +131,16 @@ public final class AgentRuntime {
                                     List.of(Map.of("tool", call.tool(), "args", call.args())),
                                     command);
                         }
+                        final var burlandoTrava = bypassingLock(command, call);
+                        if (burlandoTrava != null) {
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "LOCK_BYPASS_REFUSED", burlandoTrava);
+                            return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                    burlandoTrava, actions, gateResults,
+                                    List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                            "reason", "destravar não foi pedido")),
+                                    command);
+                        }
                         final var inventedColor = fabricatedColor(command, call, admission.spec());
                         if (inventedColor != null) {
                             trace.toolRejected(trace.newSpan(), planSpan, call,
@@ -520,6 +530,33 @@ public final class AgentRuntime {
      * <p>Se o comando não nomeia cor nenhuma, não bloqueia: aí a escolha é
      * legitimamente do planejador (ex.: "deixa a sala mais quente").
      */
+    /** Tools cujo efeito é REMOVER uma proteção que o Felipe pôs. */
+    private static final List<String> PROTECTION_REMOVING = List.of("unlock_object");
+
+    /** Verbos que contam como "o Felipe pediu para destravar". */
+    private static final List<String> UNLOCK_WORDS = List.of(
+            "destrav", "desbloque", "libera", "liberar", "unlock", "solta");
+
+    /**
+     * O modelo tentou DESTRAVAR para contornar uma trava?
+     *
+     * <p>Caso real (2026-09-27): a cama estava travada, o comando era "pinta a cama
+     * de preto", o {@code set_color} recusou corretamente ("está travado") — e o
+     * modelo chamou {@code unlock_object} e destravou. Trava que o modelo desfaz
+     * sozinho não é proteção nenhuma; é um pedido de licença que ele mesmo assina.
+     *
+     * <p>Destravar é uma intenção própria: só roda se o comando pedir.
+     */
+    private static String bypassingLock(final String command, final ToolCall call) {
+        if (!PROTECTION_REMOVING.contains(call.tool())) return null;
+        final var said = command == null ? "" : command.toLowerCase();
+        if (UNLOCK_WORDS.stream().anyMatch(said::contains)) return null;
+        return "Você não pediu para destravar. O modelo tentou destravar "
+                + call.args().getOrDefault("object_id", "?")
+                + " para conseguir fazer a alteração. A trava existe justamente para "
+                + "impedir isso — peça explicitamente se for o caso.";
+    }
+
     private static String fabricatedColor(final String command, final ToolCall call,
                                           final ToolSpec spec) {
         if (!"set_color".equals(call.tool())) return null;
@@ -534,7 +571,17 @@ public final class AgentRuntime {
         for (final var entry : canonicalByName.entrySet()) {
             if (said.contains(entry.getKey())) named.add(entry.getValue());
         }
-        if (named.isEmpty() || named.contains(chosen)) return null;
+        if (named.contains(chosen)) return null;
+        if (named.isEmpty()) {
+            // Liberar este caso foi um erro meu, pago no protocolo de teste de
+            // 2026-09-27: "desfaz a ultima alteracao" virou undo + PINTAR o sofa de
+            // verde-escuro, e a contagem de edicoes mascarou (uma sai, uma entra).
+            // Pintar sem cor pedida e alteracao inventada, ponto.
+            return "Você não disse nenhuma cor neste comando, e eu não vou escolher uma. "
+                    + "O modelo quis aplicar " + chosen + " em "
+                    + call.args().getOrDefault("object_id", "?")
+                    + ". Diga a cor, ou confirme essa proposta.";
+        }
         return "Você não pediu essa cor. O comando fala em " + String.join("/", named)
                 + " e o modelo quis aplicar " + chosen + " em "
                 + call.args().getOrDefault("object_id", "?")

@@ -697,6 +697,79 @@ class AgentRuntimeTest {
                 "a acao real tem que estar na lista, mesmo com o texto contradizendo");
     }
 
+    // -- buracos achados pelo protocolo de teste da review (2026-09-27) ----
+    @Test
+    void comandoSemNenhumaCorNaoPodePintarNada() {
+        // BUG REAL: pedi "desfaz a ultima alteracao" e o modelo desfez UMA (certo)
+        // e DEPOIS pintou o sofa de verde-escuro. Minha guarda `fabricatedColor`
+        // deixava passar porque o comando nao nomeia cor NENHUMA — eu tinha
+        // liberado esse caso pensando em "deixa a sala mais quente". Errado:
+        // pintar sem cor pedida e alteracao inventada, e a contagem de edicoes
+        // ainda mascara (undo tira uma, set_color poe outra: total igual).
+        final var host = hostComSetColor(List.of(44, 44, 48), List.of(44, 72, 54),
+                List.of(44, 72, 54));
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("sala.sofa", "verde"))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("desfaz a ultima alteracao",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("set_color"),
+                "sem cor no comando, nao pinta");
+    }
+
+    /** `unlock_object` nao esta no dubl padrao; registrar para testar A GUARDA, e
+     *  nao o UNKNOWN_TOOL (que faria o teste passar pelo motivo errado). */
+    private static FakeCapabilityHost hostComUnlock() {
+        final var host = FakeCapabilityHost.standard();
+        host.register(new ToolSpec("unlock_object", "destrava um objeto",
+                        Map.of("type", "object", "properties",
+                                Map.of("object_id", Map.of("type", "string")),
+                                "required", List.of("object_id")),
+                        Map.of(), "NONE", true, Risk.LOW, false, true,
+                        List.of("scene"), 30),
+                args -> ToolResult.success("unlock_object",
+                        Map.of("unlocked", String.valueOf(args.get("object_id"))), 3));
+        return host;
+    }
+
+    @Test
+    void modeloNaoPodeDESTRAVARparaContornarUmaTrava() {
+        // BUG REAL, o mais grave depois do alvo errado: travei a cama, pedi para
+        // pintar, o `set_color` recusou CERTO ("esta travado") — e o modelo chamou
+        // `unlock_object` e destravou. Trava que o modelo desfaz sozinho nao e
+        // protecao. Destravar so acontece se o Felipe pedir.
+        final var host = hostComUnlock();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        new ToolCall("unlock_object", Map.of("object_id", "suite_01.cama")))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta a cama da suite 01 de preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("unlock_object"),
+                "destravar nao foi pedido");
+    }
+
+    @Test
+    void destravarFuncionaQuandoOcomandoPEDE() {
+        final var host = hostComUnlock();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        new ToolCall("unlock_object", Map.of("object_id", "suite_01.cama")))),
+                PlannerDecision.finalAnswer("destravada"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("destrava a cama da suite 01",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("unlock_object"));
+    }
+
     // -- contexto entre comandos -------------------------------------------
     @Test
     void oEstadoAprendeComOresultadoRealEalimentaOcomandoSeguinte() {
