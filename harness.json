@@ -11,8 +11,8 @@
   "ptToM": "0.0259",
   "sketchupExe": "C:/Program Files/SketchUp/SketchUp 2026/SketchUp/SketchUp.exe",
 
-  "_comment_agent": "O modelo e' trocavel sem tocar em codigo. Precisa suportar tool calling nativo no Ollama.",
-  "agentModel": "qwen2.5-coder:14b",
+  "_comment_agent": "O modelo e' trocavel sem tocar em codigo. Precisa suportar tool calling nativo no Ollama. MEDIDO em 2026-09-27 com tools/bench_models.py: qwen3:14b acerta 4/5, qwen2.5-coder:14b acerta 2/5 (duas rodadas identicas). O qwen3 e ~30% mais lento e vale a troca: quando erra, ele PERGUNTA em vez de inventar argumento.",
+  "agentModel": "qwen3:14b",
   "ollamaUrl": "http://127.0.0.1:11434",
   "agentTimeoutSec": 180,
   "maxAgentAttempts": 4,
