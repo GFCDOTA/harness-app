@@ -1,19 +1,40 @@
-# Capability Matrix — o que existe de verdade
+# Capability Matrix — a ANÁLISE. A contagem está em outro lugar.
 
-**Levantado em:** 2026-09-19 · contra `feat/master-orchestrator` @ `e6d6b00`
-e `apps/sketchup-mcp` @ `feat/apartamento-mobiliado-completo`
+**Levantado em:** 2026-09-19 · **contagem movida em:** 2026-09-27
 
-Regra deste documento: **"há uma função parecida" não é READY.** READY significa
-que existe caminho de ponta a ponta, chamável pelo Harness, com efeito observável
-e verificável. Cada linha aponta para código real — nenhum módulo foi inventado.
+## ⚠️ Este documento NÃO é a fonte da verdade sobre o que existe
 
-## Legenda
+A lista de capabilities e seus estados vivem em
+[**`CAPABILITY_TABLE.md`**](CAPABILITY_TABLE.md), **gerada do registry** por
+`tools/capability_table.py` e travada por
+`capabilities/tests/test_capability_table.py`.
+
+Por que a mudança: esta matriz era mantida à mão em paralelo ao registry e as duas
+derivaram. Em 2026-09-27 o diagnóstico era **40 linhas aqui contra 36 tools no
+runtime**, com **17 nomes sem tool nenhuma** e **13 tools sem linha** — incluindo
+entradas marcadas READY para capability que não existe com aquele nome
+(`get_scene`, `save_project`, `snapshot`, `status` são, no runtime,
+`get_project_state`, `save_snapshot`, `save_snapshot` e `get_system_status`).
+
+Num app cujo propósito é **ensinar** como o sistema funciona, documento que diz
+READY para coisa inexistente é o pior defeito possível. Duas fontes de verdade
+sempre viram uma verdade e uma mentira.
+
+**O que sobrou aqui, e por que vale:** a ANÁLISE — a ressalva por capability, o
+que falta em cada PARTIAL, a evidência de código, o histórico das fatias. Isso é
+julgamento humano e o registry não carrega. As tabelas abaixo continuam úteis como
+leitura; os **status individuais podem estar velhos** — confira na tabela gerada.
+
+## Legenda (histórica, para ler as tabelas abaixo)
 
 | Status | Significado |
 |---|---|
 | **READY** | chamável pelo Harness, executa, efeito observável |
 | **PARTIAL** | executa, mas com ressalva relevante (escopo, verificação, alcance) |
 | **MISSING** | não existe caminho; hoje é tool que recusa com motivo |
+
+`PARTIAL` é **julgamento humano** e por isso não aparece na tabela gerada: o
+runtime sabe dizer `implemented` true/false, não "executa com ressalva".
 
 **Verified?** = existe checagem de que a ação *ocorreu*, além de o handler não ter
 lançado. Hoje a resposta honesta é quase sempre *não* — ver
@@ -137,9 +158,15 @@ ainda não chegaram no arquivo — é a métrica honesta dessa defasagem.
 
 ## Resumo
 
-| | READY | PARTIAL | MISSING |
-|---|---|---|---|
-| contagem | 13 | 7 | 19 |
+**A contagem saiu daqui em 2026-09-27.** Ela vive em
+[`CAPABILITY_TABLE.md`](CAPABILITY_TABLE.md), gerada do registry. Manter número à
+mão aqui foi exatamente o que produziu o drift — uma contagem escrita parece
+medida e não é.
+
+```bash
+python tools/capability_table.py        # ver
+python tools/capability_table.py --write  # regravar depois de mexer no registry
+```
 
 **Onde estava o valor represado** — os três MISSING que eram **fiação**, não
 construção:
