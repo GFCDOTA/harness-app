@@ -105,6 +105,24 @@ public final class AgentTrace {
                 (double) result.elapsedMs(), meta);
     }
 
+    /**
+     * PROCEDÊNCIA da resolução de alvo. É o que responde, depois do fato: o que o
+     * Felipe pediu, o que o modelo propôs, que objetos existiam, qual regra decidiu.
+     *
+     * <p>Um evento só, com os candidatos dentro, em vez de um por candidato: o
+     * grafo do Inspector fica legível e a auditoria continua completa.
+     */
+    public void targetResolved(final String spanId, final String parentSpanId,
+                               final ToolCall call, final TargetResolution resolution) {
+        final var meta = new LinkedHashMap<String, Object>(resolution.toMeta());
+        meta.put("tool", call.tool());
+        meta.put("args", call.args());
+        emit(spanId, parentSpanId, "harness.target", CAT_AGENT,
+                resolution.blocked() ? "blocked" : "ok",
+                resolution.blocked() ? "target.guard.blocked" : "target.guard.allowed",
+                null, meta);
+    }
+
     public void toolRejected(final String spanId, final String parentSpanId, final ToolCall call,
                              final String code, final String message) {
         emit(spanId, parentSpanId, "capability." + call.tool(), CAT_TOOL, "error",

@@ -315,3 +315,74 @@ do sketchup-mcp usa). Detalhe e gotchas na memoria do Claude.
 **Aberto:** o `bench_models.py` depende de um snapshot fixo no `SNAPSHOT` e cai
 para o mais recente se ele nao existir. Rodar em maquina limpa exige um
 `save_snapshot` antes.
+
+---
+
+## Target Resolution Gate + procedencia (2026-09-27)
+
+Fatia pedida por review externa depois de o protocolo dela expor o P0: o comando
+era "pinta o armario da COZINHA de verde-escuro", o Harness pintou o SOFA DA SALA
+e o desfecho saiu **CLEAN**. Reportar sucesso para mutacao no objeto errado e o
+defeito mais grave que este app teve.
+
+**Principio:** o LLM PROPOE o alvo; a autoridade e o resolver deterministico, que
+consulta o estado real da cena.
+
+```
+texto do usuario -> proposta do LLM -> TargetResolver -> TargetResolution -> guard -> execucao
+```
+
+**Sem `confidence` numerica**, de proposito. Um score que o modelo produz nao e
+auditavel, nao se reproduz e vira threshold magico. Estado semantico no lugar:
+`EXACT · ALIAS_MATCH · AMBIGUOUS · NOT_FOUND · ROOM_MISMATCH · KIND_MISMATCH ·
+UNKNOWN`. So EXACT/ALIAS_MATCH (e UNKNOWN, quando nao ha indice) autorizam.
+
+**Regras duras travadas por teste**
+1. Nunca fallback cross-room. Comando nomeia a cozinha -> candidato da sala jamais serve.
+2. Nunca fallback cross-kind. Comando nomeia um objeto que existe -> o proposto nao pode ser outra coisa.
+3. Ambiguo PERGUNTA. Mais de um candidato valido e sem id explicito nao vira escolha silenciosa.
+4. O gate vale para TODA tool que muda estado e recebe `object_id` — nao e guarda por tool.
+5. Exclusividade de intencao: turno de CONTROLE (`undo`/`redo`/`lock`/`unlock`/`apply`/`open`)
+   nao roda tool de ALTERACAO. Mata a classe do "undo executou undo e depois pintou",
+   em vez de criar guarda para cada combinacao que o modelo inventa.
+6. Bloqueio nunca termina CLEAN — sai `NEEDS_FELIPE` com a procedencia nas options.
+
+**Vocabulario vem da CENA, nao de tabela inventada.** Comodo e identificado por
+token DISTINTIVO (aparece no nome de um comodo so): "cozinha" identifica, "suite"
+nao (esta em SUITE 01 e 02) e por isso nao vira restricao. Objeto e identificado
+pelo label/kind real — existe "Armario de servico" na A.S., e "armario" casa com
+ELE, nao com um sofa.
+
+**Gotcha pago em teste vermelho:** "de" era token DISTINTIVO de
+"SALA DE JANTAR | SALA DE ESTAR". Sem lista de palavras funcionais, qualquer
+comando com "de" passava a nomear a sala — o bug do sofa deixava de ser pego E
+"pinta a cama de preto" era bloqueado como se a sala tivesse sido nomeada. As duas
+falhas pelo mesmo motivo.
+
+**O oposto do bug tambem esta travado:** comando que nao nomeia comodo nem objeto
+NAO e bloqueado (`deixa mais escuro`, `pinta a escrivaninha da suite`). Guarda que
+trava pedido legitimo tambem e defeito, so mais chato de descobrir.
+
+**Procedencia:** evento `target.guard.allowed|blocked` com status, proposto,
+selecionado, comodos nomeados e os candidatos reais (com `roomOk`/`kindOk` por
+candidato). Responde depois do fato: o que o Felipe pediu, o que o modelo propos,
+que objetos existiam, qual regra decidiu, e se alguma mutacao aconteceu.
+
+**Dois contratos mudaram de proposito**, porque existe um estagio novo:
+`comandoQueMoveEValidaTerminaClean` passa a ver `list_rooms`/`list_objects` (duas
+LEITURAS, uma vez por comando), e `AgentTraceContractTest` passa a ver
+`target.guard.allowed` na sequencia.
+
+**Verificado no app real:** o comando do P0 termina `NEEDS_FELIPE` com ZERO
+mutacao; "pinta o objeto cozinha.upper_cabinet_01 de areia" aplica so nele.
+
+**Testes:** Java 210 (21 novos), Python 111.
+
+**Deliberadamente FORA desta fatia**
+- Tabela de sinonimos PT -> kind (`armario` -> `upper_cabinet`). Hoje o match vem do
+  nome real da cena; inventar sinonimo daria falso positivo, e meio-feito e pior
+  que ausente.
+- A TELA de procedencia no Pipeline View. Os eventos carregam os dados; o desenho
+  da tela e peca propria.
+- Gerar a matriz de capabilities do registry (o drift que a review apontou):
+  40 linhas na matriz x 36 tools no runtime, 17 nomes sem tool e 13 tools sem linha.

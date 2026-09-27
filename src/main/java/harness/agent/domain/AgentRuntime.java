@@ -68,6 +68,9 @@ public final class AgentRuntime {
         // ultima alteracao" virou 4 `undo` e apagou 7 edicoes. Correcao
         // deterministica, como manda o CLAUDE.md deste repo.
         final var applied = new LinkedHashSet<String>();
+        // Índice da cena REAL, carregado uma vez por comando e só quando alguma
+        // mutação aparece. Quem decide o alvo é ele, não o modelo.
+        SceneIndex sceneIndex = null;
 
         trace.runStarted(command, contextMeta());
 
@@ -130,6 +133,34 @@ public final class AgentRuntime {
                                     actions, gateResults,
                                     List.of(Map.of("tool", call.tool(), "args", call.args())),
                                     command);
+                        }
+                        final var soControle = controlOnlyViolation(command, call);
+                        if (soControle != null) {
+                            trace.toolRejected(trace.newSpan(), planSpan, call,
+                                    "CONTROL_INTENT_ONLY", soControle);
+                            return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                    soControle, actions, gateResults,
+                                    List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                            "reason", "turno de controle não altera a planta")),
+                                    command);
+                        }
+                        // REGRA 5 da review: TODA operação que muda estado passa pelo
+                        // mesmo gate de alvo. Não é guarda por tool.
+                        // `spec()` é null quando a admissão recusou (tool inexistente):
+                        // nada vai executar, e não há alvo a resolver.
+                        if (admission.spec() != null && admission.spec().mutates()
+                                && call.args().containsKey("object_id")) {
+                            if (sceneIndex == null) sceneIndex = loadSceneIndex();
+                            final var alvo = TargetResolver.resolve(
+                                    command, String.valueOf(call.args().get("object_id")), sceneIndex);
+                            trace.targetResolved(trace.newSpan(), planSpan, call, alvo);
+                            if (alvo.blocked()) {
+                                return finish(trace, startedAt, AgentOutcome.Status.NEEDS_FELIPE,
+                                        mensagemDeAlvo(alvo), actions, gateResults,
+                                        List.of(Map.of("tool", call.tool(), "args", call.args(),
+                                                "targetResolution", alvo.toMeta())),
+                                        command);
+                            }
                         }
                         final var burlandoTrava = bypassingLock(command, call);
                         if (burlandoTrava != null) {
@@ -530,6 +561,78 @@ public final class AgentRuntime {
      * <p>Se o comando não nomeia cor nenhuma, não bloqueia: aí a escolha é
      * legitimamente do planejador (ex.: "deixa a sala mais quente").
      */
+    /**
+     * Lê o índice da cena real pelas capabilities que JÁ existem.
+     *
+     * <p>Nenhuma capability nova foi criada para o gate — `list_rooms` e
+     * `list_objects` são leitura e já estavam publicadas. Se o host não responder,
+     * o índice vem vazio e a resolução devolve UNKNOWN: não afirma nem bloqueia.
+     */
+    private SceneIndex loadSceneIndex() {
+        try {
+            final var rooms = this.host.invoke(new ToolCall("list_rooms", Map.of()));
+            final var objects = this.host.invoke(new ToolCall("list_objects", Map.of()));
+            return SceneIndex.from(rooms, objects);
+        } catch (final RuntimeException ex) {
+            return SceneIndex.empty();
+        }
+    }
+
+    /** A recusa explica em português o que o gate viu, sem jargão de status. */
+    private static String mensagemDeAlvo(final TargetResolution alvo) {
+        return switch (alvo.status()) {
+            case ROOM_MISMATCH -> "Você falou de outro cômodo. " + alvo.reason()
+                    + ". Não vou alterar objeto de cômodo que você não pediu.";
+            case KIND_MISMATCH -> "Esse não é o objeto que você nomeou. " + alvo.reason() + ".";
+            case AMBIGUOUS -> "Mais de um objeto casa com o que você pediu ("
+                    + alvo.reason() + "). Diga qual, ou use o id.";
+            case NOT_FOUND -> "Não existe '" + alvo.proposedId() + "' nesta planta.";
+            default -> "Não consegui confirmar o alvo: " + alvo.reason() + ".";
+        };
+    }
+
+    /** Tools que ALTERAM o projeto. Um turno de controle não roda nenhuma delas. */
+    private static final List<String> MUTATION_TOOLS = List.of(
+            "set_color", "move_object", "rotate_object", "scale_object",
+            "delete_object", "create_object", "set_material", "set_texture");
+
+    /** Verbos de CONTROLE: o turno é sobre o histórico/arquivo, não sobre a planta. */
+    private static final List<String> CONTROL_WORDS = List.of(
+            "desfaz", "desfaça", "desfaca", "desfazer", "undo",
+            "refaz", "refazer", "redo",
+            "trava", "travar", "lock", "destrav", "desbloque", "unlock",
+            "aplica", "aplicar", "materializ", "apply",
+            "abre", "abrir", "open",
+            "snapshot", "restaura", "restaurar");
+
+    /** Verbos de ALTERAÇÃO: se aparecem junto, o turno não é só de controle. */
+    private static final List<String> MUTATION_WORDS = List.of(
+            "pinta", "pintar", "cor ", "colore", "muda", "mudar", "troca", "trocar",
+            "move", "mover", "empurra", "afasta", "desloca", "gira", "girar",
+            "apaga", "apagar", "deleta", "remove", "remover", "redimensiona");
+
+    /**
+     * Exclusividade de intenção: turno de CONTROLE não altera a planta.
+     *
+     * <p>Mata uma CLASSE de bug em vez de uma combinação. O caso que revelou:
+     * "desfaz a última alteração" executou o undo (certo) <b>e depois pintou o
+     * sofá</b>. Cada combinação maluca que o modelo inventa não precisa de guarda
+     * própria — o turno já não autoriza a família.
+     *
+     * <p>Comando composto ("desfaz e pinta a cama de preto") tem verbo das duas
+     * famílias e NÃO é exclusivo: aí o Felipe pediu as duas coisas.
+     */
+    private static String controlOnlyViolation(final String command, final ToolCall call) {
+        if (!MUTATION_TOOLS.contains(call.tool())) return null;
+        final var said = command == null ? "" : command.toLowerCase();
+        final var pediuControle = CONTROL_WORDS.stream().anyMatch(said::contains);
+        if (!pediuControle) return null;
+        final var pediuAlteracao = MUTATION_WORDS.stream().anyMatch(said::contains);
+        if (pediuAlteracao) return null;
+        return "Este comando é de controle, não de alteração. O modelo tentou rodar `"
+                + call.tool() + "`, que muda o projeto, e isso não foi pedido aqui.";
+    }
+
     /** Tools cujo efeito é REMOVER uma proteção que o Felipe pôs. */
     private static final List<String> PROTECTION_REMOVING = List.of("unlock_object");
 
