@@ -61,10 +61,15 @@ class AgentTraceContractTest {
 
         assertFalse(events.isEmpty(), "o recorder não escreveu nada");
         assertTrue(events.stream().allMatch(e -> "cmd_contrato".equals(e.runId())));
+        // `target.guard.allowed` entrou aqui quando o gate de resolução de alvo
+        // passou a existir: ele é um ESTÁGIO do caminho de mutação, não um log
+        // solto, e o Inspector tem que enxergá-lo para se poder auditar por que um
+        // objeto foi escolhido. Aparece só antes de tool que muda estado.
         assertEquals(List.of("run.started", "agent.plan", "agent.plan",
                         "capability.lookup", "tool.invoke", "tool.verified",
                         "agent.plan", "agent.plan",
-                        "capability.lookup", "tool.invoke", "tool.verified", "gate.run",
+                        "capability.lookup", "target.guard.allowed",
+                        "tool.invoke", "tool.verified", "gate.run",
                         "agent.plan", "agent.plan", "run.finished"),
                 events.stream().map(e -> e.name()).toList());
     }

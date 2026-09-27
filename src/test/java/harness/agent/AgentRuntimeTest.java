@@ -73,7 +73,12 @@ class AgentRuntimeTest {
         assertEquals(AgentOutcome.Status.CLEAN, out.status());
         assertTrue(out.changedSystem());
         assertTrue(out.undoAvailable());
-        assertEquals(List.of("find_object", "move_object", "run_gates"), host.toolNamesCalled());
+        // `list_rooms`/`list_objects` entraram na sequencia quando o gate de alvo
+        // passou a existir: antes de MUDAR algo, o Harness le a cena REAL para
+        // saber se o objeto escolhido e o que o Felipe pediu. Sao leituras, uma vez
+        // por comando. O pedaco que importa continua igual: move e DEPOIS gate.
+        assertEquals(List.of("find_object", "list_rooms", "list_objects",
+                "move_object", "run_gates"), host.toolNamesCalled());
     }
 
     @Test
@@ -387,7 +392,8 @@ class AgentRuntimeTest {
                                                         "preto", "preto", "black", "preto",
                                                         "azul", "azul", "blue", "azul",
                                                         "terracota", "terracota",
-                                                        "verde", "verde"))),
+                                                        "verde", "verde",
+                                                        "verde-escuro", "verde-escuro"))),
                                 "required", List.of("object_id", "color")),
                         Map.of(), "STATE_DELTA", true, Risk.MEDIUM, true, true,
                         List.of("scene"), 30),
@@ -768,6 +774,122 @@ class AgentRuntimeTest {
                         new AgentTrace("r", TraceRecorder.NOOP));
 
         assertTrue(host.toolNamesCalled().contains("unlock_object"));
+    }
+
+    // -- o gate de alvo no laco (regras 5, 7 e 8 da review) ----------------
+    /** Dubl com o indice de cena REAL disponivel por list_rooms/list_objects. */
+    private static FakeCapabilityHost hostComCena() {
+        final var host = hostComSetColor(List.of(44, 44, 48), List.of(44, 72, 54),
+                List.of(44, 72, 54));
+        host.register(new ToolSpec("list_rooms", "lista comodos",
+                        Map.of("type", "object", "properties", Map.of()),
+                        Map.of(), "NONE", true, Risk.LOW, false, false, List.of(), 30),
+                args -> ToolResult.success("list_rooms",
+                        Map.of("rooms", List.of(
+                                Map.of("id", "r000", "name", "SUITE 01"),
+                                Map.of("id", "r002", "name", "SALA DE JANTAR | SALA DE ESTAR"),
+                                Map.of("id", "r004", "name", "COZINHA"))), 2));
+        host.register(new ToolSpec("list_objects", "lista objetos",
+                        Map.of("type", "object", "properties", Map.of()),
+                        Map.of(), "NONE", true, Risk.LOW, false, false, List.of(), 30),
+                args -> ToolResult.success("list_objects",
+                        Map.of("objects", List.of(
+                                Map.of("id", "suite_01.cama", "roomId", "r000",
+                                        "room", "SUITE 01", "label", "Cama",
+                                        "kinds", List.of("bed")),
+                                Map.of("id", "sala_de_jantar_sala_de_estar.sofa", "roomId", "r002",
+                                        "room", "SALA DE JANTAR | SALA DE ESTAR", "label", "Sofa",
+                                        "kinds", List.of("sofa")),
+                                Map.of("id", "cozinha.upper_cabinet_01", "roomId", "r004",
+                                        "room", "COZINHA", "label", "upper_cabinet_01",
+                                        "kinds", List.of("upper_cabinet")))), 3));
+        return host;
+    }
+
+    @Test
+    void oBUGdoAlvoErradoNaoPassaMaisPeloLaco() {
+        // "pinta o armario da COZINHA" tentando pintar o SOFA DA SALA: era o P0,
+        // e o desfecho saia CLEAN.
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        pintarDe("sala_de_jantar_sala_de_estar.sofa", "verde-escuro"))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta o armario da cozinha de verde-escuro",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(out.changedSystem(), "nenhuma mutacao podia ter acontecido");
+        assertFalse(host.toolNamesCalled().contains("set_color"));
+    }
+
+    @Test
+    void oBloqueioDeAlvoDEIXArastroAuditavelNoTrace() {
+        final var host = hostComCena();
+        final var recorder = new Capturing();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        pintarDe("sala_de_jantar_sala_de_estar.sofa", "verde-escuro"))));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta o armario da cozinha de verde-escuro",
+                        new AgentTrace("r", recorder));
+
+        assertTrue(recorder.names().contains("target.guard.blocked"),
+                "sem evento de procedencia nao da pra auditar: " + recorder.names());
+        final var evento = recorder.events.stream()
+                .filter(e -> "target.guard.blocked".equals(e.name())).findFirst().orElseThrow();
+        assertEquals("ROOM_MISMATCH", evento.meta().get("status"));
+        assertTrue(evento.meta().containsKey("candidates"), "os candidatos reais tem que estar la");
+    }
+
+    @Test
+    void alvoCorretoDentroDoComodoNomeadoPASSA() {
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(
+                        pintarDe("cozinha.upper_cabinet_01", "verde-escuro"))),
+                PlannerDecision.finalAnswer("pintado"));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("pinta o objeto cozinha.upper_cabinet_01 de verde-escuro",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.CLEAN, out.status());
+        assertTrue(host.toolNamesCalled().contains("set_color"));
+    }
+
+    // -- regra 7: exclusividade de intencao ---------------------------------
+    @Test
+    void turnoDeCONTROLEnaoRodaFerramentaQueAltera() {
+        // "desfaz a ultima alteracao" executou undo E DEPOIS pintou o sofa. Guarda
+        // por combinacao nao escala; o turno inteiro e que nao autoriza a familia.
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))));
+
+        final var out = runtime(host, planner, new AgentState("p"), 3)
+                .execute("desfaz a ultima alteracao", new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertEquals(AgentOutcome.Status.NEEDS_FELIPE, out.status());
+        assertFalse(host.toolNamesCalled().contains("set_color"));
+    }
+
+    @Test
+    void comandoCOMPOSTOpedeAsDuasCoisasEnaoEbloqueado() {
+        // "desfaz e pinta a cama de preto" tem verbo das duas familias: o Felipe
+        // pediu as duas. Bloquear aqui seria travar pedido legitimo.
+        final var host = hostComCena();
+        final var planner = new ScriptedPlanner("q",
+                PlannerDecision.callTools(List.of(pintarDe("suite_01.cama", "preto"))),
+                PlannerDecision.finalAnswer("feito"));
+
+        runtime(host, planner, new AgentState("p"), 3)
+                .execute("desfaz a ultima alteracao e pinta a cama da suite 01 de preto",
+                        new AgentTrace("r", TraceRecorder.NOOP));
+
+        assertTrue(host.toolNamesCalled().contains("set_color"));
     }
 
     // -- contexto entre comandos -------------------------------------------
