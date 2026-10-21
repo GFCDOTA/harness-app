@@ -11,7 +11,7 @@ import java.util.Map;
  * derrubou e que valem registro, porque eram exatamente o palpite plausível:
  *
  * <ul>
- *   <li><b>Não há classes.</b> O pipeline é FUNCIONAL — {@code tools/reference_db.py}
+ *   <li><b>Não há classes.</b> O pipeline é FUNCIONAL — {@code tools/knowledge/reference_db.py}
  *       tem 943 linhas e zero classes. Modelar como classe+método inventaria nomes.</li>
  *   <li><b>Não há {@code qdrant-client} nem {@code shapely}.</b> A conversa com Qdrant
  *       e Ollama é {@code urllib} da stdlib; está no docstring do próprio módulo
@@ -29,47 +29,47 @@ public final class ImplementationCatalog {
     /** Prefixo -> fatos. Ordem importa: o mais específico primeiro. */
     private static final List<Map.Entry<String, ExecutionFacts>> ENTRIES = List.of(
             Map.entry("ollama.nomic-embed-text", new ExecutionFacts(
-                    new Implementation(PY, "tools/rag_embed_backend.py", "embed",
+                    new Implementation(PY, "tools/knowledge/rag_embed_backend.py", "embed",
                             List.of("urllib"), "Ollama (serviço) + " + CPY),
                     ExecutionFacts.IA, "Adapter", true)),
 
             Map.entry("ollama.deepseek", new ExecutionFacts(
-                    new Implementation(PY, "tools/ollama_bridge.py", "ask",
+                    new Implementation(PY, "tools/oracle/ollama_bridge.py", "ask",
                             List.of("urllib"), "Ollama (serviço) + " + CPY),
                     ExecutionFacts.IA, "Adapter", true)),
 
             Map.entry("ollama.", new ExecutionFacts(
-                    new Implementation(PY, "tools/ollama_bridge.py", "ask",
+                    new Implementation(PY, "tools/oracle/ollama_bridge.py", "ask",
                             List.of("urllib"), "Ollama (serviço) + " + CPY),
                     ExecutionFacts.SERVICO, "Adapter", true)),
 
             Map.entry("qdrant.", new ExecutionFacts(
-                    new Implementation(PY, "tools/rag_embed_backend.py", "search",
+                    new Implementation(PY, "tools/knowledge/rag_embed_backend.py", "search",
                             List.of("urllib"), "Qdrant (container) + " + CPY),
                     ExecutionFacts.SERVICO, "Adapter de VectorStore", false)),
 
             Map.entry("reference_db.retrieve", new ExecutionFacts(
-                    new Implementation(PY, "tools/reference_db.py", "retrieve",
+                    new Implementation(PY, "tools/knowledge/reference_db.py", "retrieve",
                             List.of(), CPY),
                     ExecutionFacts.RAG, "Orquestrador de ports", false)),
 
             Map.entry("reference_db.faceted", new ExecutionFacts(
-                    new Implementation(PY, "tools/reference_db.py", "_faceted_rank",
+                    new Implementation(PY, "tools/knowledge/reference_db.py", "_faceted_rank",
                             List.of("sqlite3"), CPY),
                     ExecutionFacts.ALGORITMO, "Repository", false)),
 
             Map.entry("reference_db.embed_recall", new ExecutionFacts(
-                    new Implementation(PY, "tools/rag_embed_backend.py", "semantic_recall",
+                    new Implementation(PY, "tools/knowledge/rag_embed_backend.py", "semantic_recall",
                             List.of("urllib"), CPY),
                     ExecutionFacts.RAG, "Adapter com degradação", false)),
 
             Map.entry("reference_db.", new ExecutionFacts(
-                    new Implementation(PY, "tools/reference_db.py", "retrieve",
+                    new Implementation(PY, "tools/knowledge/reference_db.py", "retrieve",
                             List.of(), CPY),
                     ExecutionFacts.RAG, "Repository", false)),
 
             Map.entry("gate.", new ExecutionFacts(
-                    new Implementation(PY, "tools/run_deterministic_gates.py", "run_all",
+                    new Implementation(PY, "tools/validation/run_deterministic_gates.py", "run_all",
                             List.of(), CPY),
                     ExecutionFacts.DETERMINISTICO, "Specification", false)),
 
@@ -79,17 +79,17 @@ public final class ImplementationCatalog {
                     ExecutionFacts.RAG, "Builder de contexto", false)),
 
             Map.entry("correction_loop", new ExecutionFacts(
-                    new Implementation(PY, "tools/correction_loop.py", "run_loop",
+                    new Implementation(PY, "tools/orchestration/correction/correction_loop.py", "run_loop",
                             List.of(), CPY),
                     ExecutionFacts.ALGORITMO, "Loop de convergência", false)),
 
             Map.entry("finding_router", new ExecutionFacts(
-                    new Implementation(PY, "tools/correction_loop.py", "run_loop",
+                    new Implementation(PY, "tools/orchestration/correction/correction_loop.py", "run_loop",
                             List.of(), CPY),
                     ExecutionFacts.ALGORITMO, "Strategy", false)),
 
             Map.entry("correction_fixes", new ExecutionFacts(
-                    new Implementation(PY, "tools/correction_loop.py", "run_loop",
+                    new Implementation(PY, "tools/orchestration/correction/correction_loop.py", "run_loop",
                             List.of(), CPY),
                     ExecutionFacts.ALGORITMO, "Command", false)),
 

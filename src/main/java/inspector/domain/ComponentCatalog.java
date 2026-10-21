@@ -31,7 +31,7 @@ public final class ComponentCatalog {
                     "um vetor de 768 números que representa o sentido do texto",
                     "Sem isto não há como comparar SIGNIFICADO. A busca cairia para casar "
                             + "palavra por palavra, e “sofá” não acharia “estofado”.",
-                    "tools/rag_embed_backend.py",
+                    "tools/knowledge/rag_embed_backend.py",
                     List.of("Embedding", "Modelo de embedding", "Ollama")),
 
             new ComponentProfile("ollama.deepseek", true,
@@ -44,7 +44,7 @@ public final class ComponentCatalog {
                     "texto gerado, com contagem de tokens de entrada e saída",
                     "É a parte que raciocina. O RAG existe para alimentar ISTO com o "
                             + "contexto certo; sem contexto, ele responde do que sabe de fábrica.",
-                    "tools/ollama_bridge.py",
+                    "tools/oracle/ollama_bridge.py",
                     List.of("LLM", "Prompt", "Tokens", "Inferência local")),
 
             new ComponentProfile("ollama.", true,
@@ -56,7 +56,7 @@ public final class ComponentCatalog {
                     "depende do modelo",
                     "depende do modelo",
                     "O Ollama é o servidor que hospeda os modelos locais.",
-                    "tools/ollama_bridge.py",
+                    "tools/oracle/ollama_bridge.py",
                     List.of("Ollama", "Inferência local")),
 
             new ComponentProfile("qdrant.", true,
@@ -69,7 +69,7 @@ public final class ComponentCatalog {
                     "os trechos mais parecidos, com uma nota de similaridade",
                     "É o que troca “procurar palavra igual” por “procurar sentido "
                             + "parecido”. Se cair, o pipeline degrada para busca estruturada.",
-                    "tools/rag_embed_backend.py",
+                    "tools/knowledge/rag_embed_backend.py",
                     List.of("Vector Database", "Similaridade de cosseno", "Collection", "RAG")),
 
             new ComponentProfile("reference_db.retrieve", true,
@@ -82,7 +82,7 @@ public final class ComponentCatalog {
                     "os trechos selecionados e o rótulo honesto do que realmente aconteceu",
                     "É a camada de decisão do retrieval. NÃO é o banco vetorial — ele chama "
                             + "o Ollama e o Qdrant, e decide o que fazer quando algo falha.",
-                    "tools/reference_db.py",
+                    "tools/knowledge/reference_db.py",
                     List.of("RAG", "Adapter", "Orquestração", "Fallback")),
 
             new ComponentProfile("reference_db.faceted", true,
@@ -95,7 +95,7 @@ public final class ComponentCatalog {
                     "trechos que casam os filtros; nesta execução, nenhum",
                     "É o que sobra quando o vetorial cai. Continua sendo RAG: recupera e "
                             + "aumenta o contexto, só que sem similaridade semântica.",
-                    "tools/reference_db.py",
+                    "tools/knowledge/reference_db.py",
                     List.of("Fallback", "Degradação", "RAG estruturado")),
 
             new ComponentProfile("reference_db.embed_recall", true,
@@ -108,7 +108,7 @@ public final class ComponentCatalog {
                     "trechos recuperados, ou a declaração de que a infra caiu",
                     "É quem percebe que o Qdrant não respondeu e marca a execução como "
                             + "degradada em vez de fingir que deu certo.",
-                    "tools/rag_embed_backend.py",
+                    "tools/knowledge/rag_embed_backend.py",
                     List.of("Circuit degradation", "Fallback", "Observabilidade honesta")),
 
             new ComponentProfile("reference_db.", true,
@@ -118,7 +118,7 @@ public final class ComponentCatalog {
                     "processo Python do sketchup-mcp", "",
                     "recuperar contexto para o RAG", "a consulta", "trechos de contexto",
                     "É a camada lógica de retrieval, não o banco.",
-                    "tools/reference_db.py",
+                    "tools/knowledge/reference_db.py",
                     List.of("RAG", "Adapter")),
 
             new ComponentProfile("gate.", true,
@@ -131,7 +131,7 @@ public final class ComponentCatalog {
                     "PASS ou FAIL, com as contagens que sustentam o veredito",
                     "É o contrapeso do LLM. O modelo sugere; o gate mede. Sem isto, erro "
                             + "de geometria passaria porque a resposta pareceu boa.",
-                    "tools/run_deterministic_gates.py",
+                    "tools/validation/run_deterministic_gates.py",
                     List.of("Gate determinístico", "Invariante", "Validação")),
 
             new ComponentProfile("architect_program", true,
@@ -157,7 +157,7 @@ public final class ComponentCatalog {
                     "as correções aplicadas e o estado terminal do ciclo",
                     "É o harness da APLICAÇÃO — o laço que o próprio pipeline roda. Não "
                             + "confundir com o agente que conduz a sessão.",
-                    "tools/correction_loop.py",
+                    "tools/orchestration/correction/correction_loop.py",
                     List.of("Harness", "Loop de correção", "Convergência")),
 
             new ComponentProfile("finding_router", true,
@@ -170,7 +170,7 @@ public final class ComponentCatalog {
                     "a rota de cada achado",
                     "É o que impede o loop de tentar consertar sozinho o que só uma pessoa "
                             + "pode decidir.",
-                    "tools/correction_loop.py",
+                    "tools/orchestration/correction/correction_loop.py",
                     List.of("Harness", "Roteamento de decisão")),
 
             new ComponentProfile("correction_fixes", true,
@@ -182,7 +182,7 @@ public final class ComponentCatalog {
                     "o achado e a rota",
                     "a mudança aplicada no modelo",
                     "É a mão que mexe. O gate aponta; isto conserta.",
-                    "tools/correction_loop.py",
+                    "tools/orchestration/correction/correction_loop.py",
                     List.of("Harness", "Auto-fix")),
 
             new ComponentProfile("inspector.", true,

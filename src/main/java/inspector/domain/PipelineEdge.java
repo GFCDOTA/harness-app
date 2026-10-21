@@ -5,7 +5,7 @@ package inspector.domain;
  *
  * <p>O tipo importa para não ensinar arquitetura errada. Uma seta de
  * {@code reference_db.retrieve} para o Ollama significa <b>houve chamada de verdade
- * nesta execução</b>; uma seta para {@code tools/reference_db.py::retrieve} significa
+ * nesta execução</b>; uma seta para {@code tools/knowledge/reference_db.py::retrieve} significa
  * <b>essa é a implementação daquele componente</b> — coisas diferentes que, desenhadas
  * igual, viram a mesma mentira.
  *
