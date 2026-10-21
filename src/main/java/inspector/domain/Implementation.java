@@ -10,7 +10,7 @@ import java.util.List;
  * A alternativa seria trocar uma interface vaga por uma interface confiante e errada.
  *
  * <p>Repare que aqui não há "classe": o pipeline Python do sketchup-mcp é FUNCIONAL.
- * {@code tools/reference_db.py} não tem uma única classe. Modelar isto como
+ * {@code tools/knowledge/reference_db.py} não tem uma única classe. Modelar isto como
  * classe+método produziria nomes que não existem.
  *
  * @param libraries bibliotecas que o módulo realmente importa. Para Qdrant e Ollama

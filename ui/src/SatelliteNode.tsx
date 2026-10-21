@@ -26,7 +26,7 @@ const MARCA: Record<SatelliteData["kind"], string> = {
  * No SATELITE: nao e uma etapa de execucao, e uma explicacao sobre a etapa.
  *
  * Por isso o desenho e outro — borda tracejada e fundo mais apagado. Se satelite e
- * passo tivessem a mesma cara, o grafo ensinaria que "tools/reference_db.py" e um
+ * passo tivessem a mesma cara, o grafo ensinaria que "tools/knowledge/reference_db.py" e um
  * servico que foi chamado, que e exatamente a confusao a evitar.
  */
 export function SatelliteNode({ data }: NodeProps<SatelliteFlowNode>) {
